@@ -12,6 +12,11 @@ while (($#)); do
       [[ $# -gt 0 ]] || { echo "--freeplane-tmux-bin requires a path" >&2; exit 2; }
       BINARY="$1"
       ;;
+    --terminal-command-b64)
+      shift
+      [[ $# -gt 0 ]] || { echo "--terminal-command-b64 requires a value" >&2; exit 2; }
+      TERMINAL_ARGS+=("--terminal-command-b64=$1")
+      ;;
     --terminal-part)
       shift
       [[ $# -gt 0 ]] || { echo "--terminal-part requires a value" >&2; exit 2; }

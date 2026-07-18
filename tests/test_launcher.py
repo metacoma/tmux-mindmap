@@ -8,6 +8,7 @@ from freeplane_tmux.cli import build_parser, main
 from freeplane_tmux.launcher import (
     DEFAULT_TERMINAL_COMMAND,
     INSIDE_TERMINAL_FLAG,
+    encode_terminal_command,
     launch_gui_terminal,
     split_terminal_command,
 )
@@ -83,8 +84,7 @@ def test_hidden_launch_mode_rebuilds_load_args(monkeypatch) -> None:
 
     result = main([
         "--_launch-gui-terminal",
-        "--terminal-part=gnome-terminal",
-        "--terminal-part=--",
+        f"--terminal-command-b64={encode_terminal_command('gnome-terminal --')}",
         "--load",
         "--detached",
         "--pretty",
