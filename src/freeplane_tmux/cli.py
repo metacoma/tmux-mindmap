@@ -21,14 +21,35 @@ def _slugify(value: str) -> str:
     return text or "freeplane"
 
 
+def _current_binary_path() -> str:
+    argv0 = (sys.argv[0] if sys.argv else "").strip()
+    if argv0:
+        expanded = str(Path(argv0).expanduser())
+        resolved = shutil.which(expanded)
+        if resolved:
+            return str(Path(resolved).resolve())
+        return str(Path(expanded).resolve())
+    return str(Path(sys.executable).expanduser().resolve())
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Export the Freeplane map root to tmuxp YAML and optionally load it."
     )
     parser.add_argument(
-        "map_name",
-        nargs="?",
+        "--create",
+        "--create-map",
+        dest="create",
+        metavar="MAP_NAME",
         help="Create a new unsaved Freeplane map with this name and exit",
+    )
+    parser.add_argument(
+        "--create-terminal",
+        help=(
+            "Shell-style GUI terminal command used by the generated root script1 when "
+            "used with --create/--create-map, for example 'gnome-terminal --' or "
+            "'xterm -e'"
+        ),
     )
     parser.add_argument("--addr", help="Freeplane gRPC address, e.g. 127.0.0.1:50051")
     parser.add_argument("--host", help="Compatibility alias for the gRPC host")
@@ -65,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--grpc-stubs-dir",
         type=Path,
-        help="Directory containing freeplane_pb2.py and freeplane_pb2_grpc.py",
+        help="Compatibility flag; bundled gRPC stubs are always used",
     )
     parser.add_argument(
         "--selected-node-id",
@@ -97,6 +118,11 @@ def _validate_create_mode(args: argparse.Namespace) -> None:
     if used:
         flags = ", ".join(used)
         raise ValueError(f"map creation mode cannot be combined with: {flags}")
+
+
+def _validate_mode_combinations(args: argparse.Namespace) -> None:
+    if args.create is None and args.create_terminal:
+        raise ValueError("--create-terminal can only be used with --create/--create-map")
 
 
 def _load_map(args: argparse.Namespace) -> tuple[RawNode, dict]:
@@ -156,13 +182,16 @@ def _run_tmuxp(path: Path, *, detached: bool) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        if args.map_name is not None:
+        _validate_mode_combinations(args)
+        if args.create is not None:
             _validate_create_mode(args)
             created_name = create_live_map(
                 address=_resolve_address(args),
                 timeout=args.timeout,
                 grpc_stubs_dir=args.grpc_stubs_dir,
-                map_name=args.map_name,
+                map_name=args.create,
+                launcher_binary_path=_current_binary_path(),
+                terminal_command=args.create_terminal,
             )
             print(created_name)
             return 0

@@ -6,16 +6,40 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
-from freeplane_tmux.grpc_client import GrpcClientError, _create_map_groovy, create_live_map
+from freeplane_tmux.grpc_client import (
+    GrpcClientError,
+    _create_map_groovy,
+    _map_local_script,
+    create_live_map,
+)
 
 
-def test_create_map_groovy_quotes_untrusted_name() -> None:
+def test_map_local_script_contains_dynamic_binary_path() -> None:
+    script = _map_local_script(
+        "/opt/freeplane-tmux/bin/freeplane-tmux",
+        "gnome-terminal --",
+    )
+
+    assert "// @ExecutionModes({ON_SELECTED_NODE})" in script
+    assert "bin/freeplane_tmux_launcher.sh" in script
+    assert "--freeplane-tmux-bin" in script
+    assert "--terminal-part" in script
+    assert "binaryFile.absolutePath" in script
+    assert "/opt/freeplane-tmux/bin/freeplane-tmux" in script
+    assert 'terminalParts = ["gnome-terminal", "--"]' in script
+
+
+def test_create_map_groovy_quotes_untrusted_name_and_sets_script1() -> None:
     name = 'ops "map"\nnewMap.name = "injected"'
-    script = _create_map_groovy(name)
+    script = _create_map_groovy(name, "/tmp/freeplane-tmux", "gnome-terminal --")
 
     assert f"def mapName = {json.dumps(name, ensure_ascii=False)}" in script
     assert script.count("newMap.name = mapName") == 1
     assert 'newMap.name = "injected"' not in script
+    assert "newMap.root['script1'] = launcherScript" in script
+    assert "launcherScript = " in script
+    assert "/tmp/freeplane-tmux" in script
+    assert "gnome-terminal" in script
 
 
 def _install_fake_grpc(monkeypatch, *, response: object):
@@ -74,6 +98,8 @@ def test_create_live_map_calls_groovy(monkeypatch) -> None:
         timeout=3.5,
         grpc_stubs_dir=None,
         map_name="Operations",
+        launcher_binary_path="/tmp/freeplane-tmux",
+        terminal_command="gnome-terminal --",
     )
 
     assert result == "Operations"
@@ -81,6 +107,9 @@ def test_create_live_map_calls_groovy(monkeypatch) -> None:
     assert calls["ready_timeout"] == 3.5
     assert calls["rpc_timeout"] == 3.5
     assert "c.newMap()" in calls["request"].groovy_code
+    assert "newMap.root['script1'] = launcherScript" in calls["request"].groovy_code
+    assert "/tmp/freeplane-tmux" in calls["request"].groovy_code
+    assert "gnome-terminal" in calls["request"].groovy_code
     assert calls["closed"] is True
 
 
@@ -98,6 +127,7 @@ def test_create_live_map_reports_groovy_failure(monkeypatch) -> None:
             timeout=1.0,
             grpc_stubs_dir=None,
             map_name="Operations",
+            launcher_binary_path="/tmp/freeplane-tmux",
         )
 
 
@@ -108,6 +138,30 @@ def test_create_live_map_rejects_empty_name() -> None:
             timeout=1.0,
             grpc_stubs_dir=None,
             map_name="   ",
+            launcher_binary_path="/tmp/freeplane-tmux",
+        )
+
+
+def test_create_live_map_rejects_empty_binary_path() -> None:
+    with pytest.raises(GrpcClientError, match="binary path must not be empty"):
+        create_live_map(
+            address="127.0.0.1:50051",
+            timeout=1.0,
+            grpc_stubs_dir=None,
+            map_name="Operations",
+            launcher_binary_path="   ",
+        )
+
+
+def test_create_live_map_rejects_invalid_terminal_command() -> None:
+    with pytest.raises(GrpcClientError, match="invalid create-terminal"):
+        create_live_map(
+            address="127.0.0.1:50051",
+            timeout=1.0,
+            grpc_stubs_dir=None,
+            map_name="Operations",
+            launcher_binary_path="/tmp/freeplane-tmux",
+            terminal_command='unclosed "quote',
         )
 
 

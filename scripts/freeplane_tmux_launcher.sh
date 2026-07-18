@@ -15,9 +15,9 @@ TERMINAL=(x-terminal-emulator -e)
 # TERMINAL=(foot --)
 # TERMINAL=(xterm -e)
 
-# Command executed inside the new terminal. An absolute path is deliberate:
-# GUI applications often start with a smaller PATH than an interactive shell.
-FREEPLANE_TMUX=(/usr/local/bin/freeplane-tmux --load)
+# Default command executed inside the new terminal.
+# Map-local scripts can override the binary path via --freeplane-tmux-bin.
+FREEPLANE_TMUX_DEFAULT=(/usr/local/bin/freeplane-tmux --load)
 
 # Keep the terminal open when startup fails so the error remains visible.
 PAUSE_ON_ERROR=1
@@ -25,9 +25,17 @@ PAUSE_ON_ERROR=1
 set -Eeuo pipefail
 
 readonly INTERNAL_FLAG="--_freeplane-tmux-inside-terminal"
+readonly BINARY_FLAG="--freeplane-tmux-bin"
+readonly TERMINAL_FLAG="--terminal-part"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SCRIPT_PATH="${SCRIPT_DIR}/$(basename -- "${BASH_SOURCE[0]}")"
 LAUNCH_LOG="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/freeplane-tmux-launcher.log"
+
+FREEPLANE_TMUX=()
+TERMINAL_OVERRIDE=()
+FORWARD_ARGS=()
+BINARY_OVERRIDE=""
+INSIDE_TERMINAL=0
 
 fail() {
     printf 'freeplane-tmux launcher: %s\n' "$*" >&2
@@ -40,6 +48,46 @@ command_exists() {
         [[ -x "$command_name" ]]
     else
         command -v -- "$command_name" >/dev/null 2>&1
+    fi
+}
+
+parse_args() {
+    local argv=("$@")
+    local index=0
+
+    FREEPLANE_TMUX=()
+    TERMINAL_OVERRIDE=()
+    FORWARD_ARGS=()
+    BINARY_OVERRIDE=""
+    INSIDE_TERMINAL=0
+
+    while (( index < ${#argv[@]} )); do
+        case "${argv[index]}" in
+            "$BINARY_FLAG")
+                ((index + 1 < ${#argv[@]})) || fail "$BINARY_FLAG requires a path"
+                BINARY_OVERRIDE="${argv[index + 1]}"
+                index=$((index + 2))
+                ;;
+            "$TERMINAL_FLAG")
+                ((index + 1 < ${#argv[@]})) || fail "$TERMINAL_FLAG requires a value"
+                TERMINAL_OVERRIDE+=("${argv[index + 1]}")
+                index=$((index + 2))
+                ;;
+            "$INTERNAL_FLAG")
+                INSIDE_TERMINAL=1
+                index=$((index + 1))
+                ;;
+            *)
+                FORWARD_ARGS+=("${argv[index]}")
+                index=$((index + 1))
+                ;;
+        esac
+    done
+
+    if [[ -n "$BINARY_OVERRIDE" ]]; then
+        FREEPLANE_TMUX=("$BINARY_OVERRIDE" --load)
+    else
+        FREEPLANE_TMUX=("${FREEPLANE_TMUX_DEFAULT[@]}")
     fi
 }
 
@@ -61,17 +109,33 @@ run_inside_terminal() {
     return "$status"
 }
 
-if [[ "${1:-}" == "$INTERNAL_FLAG" ]]; then
-    shift
-    run_inside_terminal "$@"
+parse_args "$@"
+
+if (( INSIDE_TERMINAL )); then
+    run_inside_terminal "${FORWARD_ARGS[@]}"
     exit $?
 fi
 
 ((${#TERMINAL[@]} > 0)) || fail 'TERMINAL is empty'
-command_exists "${TERMINAL[0]}" || fail \
-    "terminal executable not found: ${TERMINAL[0]} (edit TERMINAL at the top of $SCRIPT_PATH)"
+
+SELECTED_TERMINAL=("${TERMINAL[@]}")
+if ((${#TERMINAL_OVERRIDE[@]} > 0)); then
+    SELECTED_TERMINAL=("${TERMINAL_OVERRIDE[@]}")
+fi
+
+command_exists "${SELECTED_TERMINAL[0]}" || fail \
+    "terminal executable not found: ${SELECTED_TERMINAL[0]}"
+
+LAUNCH_ARGS=()
+if [[ -n "$BINARY_OVERRIDE" ]]; then
+    LAUNCH_ARGS+=("$BINARY_FLAG" "$BINARY_OVERRIDE")
+fi
+for terminal_part in "${TERMINAL_OVERRIDE[@]}"; do
+    LAUNCH_ARGS+=("$TERMINAL_FLAG" "$terminal_part")
+done
+LAUNCH_ARGS+=("${FORWARD_ARGS[@]}")
 
 # Freeplane must not wait for the terminal window to close. Errors produced before
 # the terminal starts are retained in LAUNCH_LOG for troubleshooting.
-nohup "${TERMINAL[@]}" "$SCRIPT_PATH" "$INTERNAL_FLAG" "$@" \
-    >>"$LAUNCH_LOG" 2>&1 &
+nohup "${SELECTED_TERMINAL[@]}" "$SCRIPT_PATH" "$INTERNAL_FLAG" \
+    "${LAUNCH_ARGS[@]}" >>"$LAUNCH_LOG" 2>&1 &

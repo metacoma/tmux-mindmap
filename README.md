@@ -24,22 +24,19 @@ For the standalone release binary:
 - Linux x86_64 with glibc compatible with Ubuntu 22.04 or newer
 - `tmux`
 - Freeplane with `freeplane_plugin_grpc` installed and running
-- The generated Freeplane gRPC Python stubs listed below
-
-Python is **not** required for the standalone binary. `tmuxp`, grpcio, Protobuf,
-Pydantic, PyYAML, and their Python runtime are bundled into the executable.
+- Python is **not** required for the standalone binary. `tmuxp`, grpcio, Protobuf,
+Pydantic, PyYAML, bundled Freeplane gRPC stubs, and their Python runtime are embedded
+into the executable.
 
 For installation from source:
 
 - Linux or another POSIX environment with `tmux`
 - Python 3.10+
 - Freeplane with `freeplane_plugin_grpc` installed and running
-- The generated Python gRPC files from `freeplane_plugin_grpc/grpc/python`:
-  - `freeplane_pb2.py`
-  - `freeplane_pb2_grpc.py`
 - Bash on hosts where alias/bootstrap context is used
 
-When installed from source, `tmuxp`, `grpcio`, Pydantic, Protobuf, and PyYAML are installed as Python dependencies.
+When installed from source, `tmuxp`, `grpcio`, Pydantic, Protobuf, PyYAML, and the
+bundled Freeplane gRPC stubs are installed as Python package contents.
 
 ## Standalone Linux binary
 
@@ -78,20 +75,7 @@ cd freeplane-tmux
 python3 -m pip install .
 ```
 
-Install the Freeplane plugin from `metacoma/freeplane_plugin_grpc`, then point this tool at its generated Python stubs:
-
-```bash
-```
-
-The same directory can be supplied explicitly:
-
-```bash
-freeplane-tmux \
-  --grpc-stubs-dir "$HOME/git/freeplane_plugin_grpc/grpc/python" \
-  --load
-```
-
-The tool also searches the current directory, the launcher directory, and common `grpc/python` paths in a source checkout.
+Install the Freeplane plugin from `metacoma/freeplane_plugin_grpc`. No external Python stubs are needed anymore; the project bundles the required gRPC modules into both the wheel and the standalone binary.
 
 ## Freeplane terminal launcher
 
@@ -112,10 +96,16 @@ TERMINAL=(gnome-terminal --)
 # TERMINAL=(kitty --)
 ```
 
-The command launched inside the terminal is also explicit:
+The command launched inside the terminal is also explicit by default:
 
 ```bash
-FREEPLANE_TMUX=(/usr/local/bin/freeplane-tmux --load)
+FREEPLANE_TMUX_DEFAULT=(/usr/local/bin/freeplane-tmux --load)
+```
+
+Map-local scripts created by `--create-map` override the binary path dynamically via:
+
+```bash
+--freeplane-tmux-bin /path/to/the/current/freeplane-tmux-binary
 ```
 
 Install the launcher at the path referenced by the Freeplane Groovy script and
@@ -134,21 +124,25 @@ written to `${XDG_RUNTIME_DIR:-/tmp}/freeplane-tmux-launcher.log`.
 
 ## Create a new Freeplane map
 
-Pass a positional map name to create a new unsaved map in the running Freeplane instance:
+Create a new unsaved map in the running Freeplane instance with `--create-map`:
 
 ```bash
-./freeplane_tmux.py --host 127.0.0.1 --port 50051 Operations
+./freeplane_tmux.py --host 127.0.0.1 --port 50051 --create-map Operations
 ```
 
 The installed command and standalone binary use the same syntax:
 
 ```bash
-freeplane-tmux --host 127.0.0.1 --port 50051 Operations
+freeplane-tmux --host 127.0.0.1 --port 50051 --create-map Operations
 ```
 
-The new map name and root-node text are both set to `Operations`. This mode exits after
-creation and does not export or load a tmuxp session. Map names containing spaces must be
-quoted.
+The new map name and root-node text are both set to `Operations`. You can optionally prepend a command before the GUI-terminal launch, for example:
+
+```bash
+freeplane-tmux --create-map Operations --create-terminal "setsid -f"
+```
+
+The root node also receives a map-local `script1` attribute that starts `~/bin/freeplane_tmux_launcher.sh` and passes the path to the current `freeplane-tmux` executable dynamically with `--freeplane-tmux-bin`; `--create-terminal` can override the GUI terminal command used by the launcher. This mode exits after creation and does not export or load a tmuxp session. Map names containing spaces must be quoted.
 
 ## Usage
 
@@ -202,7 +196,7 @@ The refactor preserves:
 --no-groovy-details
 ```
 
-Additional useful flags are `--map-json` and `--grpc-stubs-dir`.
+Additional useful flags are `--create-map`, `--create-terminal`, `--map-json`, and `--grpc-stubs-dir`.
 
 ## Mindmap semantics
 

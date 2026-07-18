@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +32,6 @@ def _extract_json_value(value: str) -> Any | None:
             except json.JSONDecodeError:
                 continue
     return None
-
 
 
 def _load_stubs(_: Path | None = None):
@@ -84,19 +84,84 @@ def _apply_details(node: dict[str, Any], details_by_id: dict[str, Any]) -> None:
             _apply_details(child, details_by_id)
 
 
-def _create_map_groovy(map_name: str) -> str:
+def _map_local_script(
+    launcher_binary_path: str,
+    terminal_command: str | None = None,
+) -> str:
+    binary_json = json.dumps(launcher_binary_path, ensure_ascii=False)
+    terminal_parts = shlex.split(terminal_command or "")
+    terminal_parts_json = json.dumps(terminal_parts, ensure_ascii=False)
+    return f"""
+// @ExecutionModes({{ON_SELECTED_NODE}})
+// @Permission_granted EXEC("execute external process")
+// @Permission_granted READ("read files")
+
+def shellScript = new File(System.getProperty("user.home"), "bin/freeplane_tmux_launcher.sh")
+def freeplaneTmuxBinary = {binary_json}
+def terminalParts = {terminal_parts_json}
+
+if (!shellScript.isFile()) {{
+    throw new RuntimeException("Shell script not found: ${{shellScript.absolutePath}}")
+}}
+if (!shellScript.canExecute()) {{
+    throw new RuntimeException("Shell script is not executable: ${{shellScript.absolutePath}}")
+}}
+
+def binaryFile = new File(freeplaneTmuxBinary)
+if (!binaryFile.isFile()) {{
+    throw new RuntimeException("freeplane-tmux binary not found: ${{binaryFile.absolutePath}}")
+}}
+if (!binaryFile.canExecute()) {{
+    throw new RuntimeException(
+        "freeplane-tmux binary is not executable: ${{binaryFile.absolutePath}}"
+    )
+}}
+
+def hasGui = System.getenv("DISPLAY") || System.getenv("WAYLAND_DISPLAY")
+if (!hasGui) {{
+    throw new RuntimeException("No GUI display detected (DISPLAY/WAYLAND_DISPLAY is not set)")
+}}
+
+def cmd = [shellScript.absolutePath, "--freeplane-tmux-bin", binaryFile.absolutePath]
+terminalParts.each {{
+    cmd.add("--terminal-part")
+    cmd.add(it.toString())
+}}
+def pb = new ProcessBuilder(cmd.collect {{ it.toString() }})
+pb.redirectErrorStream(true)
+pb.start()
+
+c.statusInfo = "Started tmux launcher"
+""".strip()
+
+
+def _create_map_groovy(
+    map_name: str,
+    launcher_binary_path: str,
+    terminal_command: str | None = None,
+) -> str:
     encoded_name = json.dumps(map_name, ensure_ascii=False)
+    encoded_script = json.dumps(
+        _map_local_script(launcher_binary_path, terminal_command),
+        ensure_ascii=False,
+    )
     return f"""
 import groovy.json.JsonOutput
 
 def mapName = {encoded_name}
+def launcherScript = {encoded_script}
 def newMap = c.newMap()
 if (newMap == null) {{
     throw new IllegalStateException("Freeplane failed to create a new map")
 }}
 newMap.name = mapName
 newMap.root.text = mapName
-return JsonOutput.toJson([name: newMap.name, root_text: newMap.root.text])
+newMap.root['script1'] = launcherScript
+return JsonOutput.toJson([
+    name: newMap.name,
+    root_text: newMap.root.text,
+    script1: newMap.root['script1']?.toString(),
+])
 """.strip()
 
 
@@ -106,12 +171,23 @@ def create_live_map(
     timeout: float,
     grpc_stubs_dir: Path | None,
     map_name: str,
+    launcher_binary_path: str,
+    terminal_command: str | None = None,
 ) -> str:
     """Create a new unsaved Freeplane map and return its effective name."""
 
     normalized_name = map_name.strip()
     if not normalized_name:
         raise GrpcClientError("map name must not be empty")
+
+    normalized_binary_path = launcher_binary_path.strip()
+    if not normalized_binary_path:
+        raise GrpcClientError("launcher binary path must not be empty")
+
+    try:
+        shlex.split(terminal_command or "")
+    except ValueError as exc:
+        raise GrpcClientError(f"invalid create-terminal: {exc}") from exc
 
     try:
         import grpc
@@ -124,7 +200,13 @@ def create_live_map(
         grpc.channel_ready_future(channel).result(timeout=timeout)
         stub = pb2_grpc.FreeplaneStub(channel)
         response = stub.Groovy(
-            pb2.GroovyRequest(groovy_code=_create_map_groovy(normalized_name)),
+            pb2.GroovyRequest(
+                groovy_code=_create_map_groovy(
+                    normalized_name,
+                    normalized_binary_path,
+                    terminal_command,
+                )
+            ),
             timeout=timeout,
         )
         if not getattr(response, "success", False):
