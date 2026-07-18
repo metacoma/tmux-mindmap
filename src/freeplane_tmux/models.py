@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+RawValidationError = ValidationError
 
 
 class RawRelationship(BaseModel):

@@ -7,14 +7,21 @@ import shutil
 import sys
 from pathlib import Path
 
-from pydantic import ValidationError
-
-from .compiler import MindmapCompiler
-from .emitter import dump_tmuxp_yaml, session_to_tmuxp
+from . import __version__
 from .errors import SemanticError
-from .grpc_client import GrpcClientError, create_live_map, fetch_live_map
-from .models import RawNode
+from .models import RawNode, RawValidationError
 
+
+def create_live_map(*args, **kwargs):
+    from .grpc_client import create_live_map as _create_live_map
+
+    return _create_live_map(*args, **kwargs)
+
+
+def fetch_live_map(*args, **kwargs):
+    from .grpc_client import fetch_live_map as _fetch_live_map
+
+    return _fetch_live_map(*args, **kwargs)
 
 def _slugify(value: str) -> str:
     text = re.sub(r"[^A-Za-z0-9._-]+", "-", (value or "").strip()).strip("-._")
@@ -36,6 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Export the Freeplane map root to tmuxp YAML and optionally load it."
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument(
         "--create",
         "--create-map",
@@ -197,6 +205,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         root, raw_data = _load_map(args)
+        from .compiler import MindmapCompiler
+        from .emitter import dump_tmuxp_yaml, session_to_tmuxp
+
         session = MindmapCompiler(root).compile()
         tmuxp_data = session_to_tmuxp(session)
         json_path, yaml_path = _output_paths(args, session.session_name)
@@ -212,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.load:
             _run_tmuxp(yaml_path, detached=args.detached)
         return 0
-    except ValidationError as exc:
+    except RawValidationError as exc:
         print(f"RAW VALIDATION ERROR:\n{exc}", file=sys.stderr)
         return 2
     except SemanticError as exc:
@@ -221,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     except (json.JSONDecodeError, ValueError) as exc:
         print(f"JSON ERROR: {exc}", file=sys.stderr)
         return 4
-    except (GrpcClientError, RuntimeError) as exc:
+    except RuntimeError as exc:
         print(f"RUNTIME ERROR: {exc}", file=sys.stderr)
         return 5
 
