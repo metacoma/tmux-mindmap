@@ -4,7 +4,6 @@ import argparse
 import json
 import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -110,13 +109,25 @@ def _write_text(path: Path, value: str) -> None:
 
 
 def _run_tmuxp(path: Path, *, detached: bool) -> None:
-    if shutil.which("tmuxp") is None:
-        raise RuntimeError("tmuxp executable not found in PATH")
-    command = ["tmuxp", "load"]
+    if shutil.which("tmux") is None:
+        raise RuntimeError("tmux executable not found in PATH")
+
+    try:
+        from tmuxp.cli import cli as tmuxp_cli
+    except ImportError as exc:
+        raise RuntimeError("bundled tmuxp runtime is unavailable") from exc
+
+    command = ["load"]
     if detached:
         command.append("--detached")
     command.append(str(path))
-    subprocess.run(command, check=True)
+
+    try:
+        tmuxp_cli(command)
+    except SystemExit as exc:
+        exit_code = exc.code if isinstance(exc.code, int) else 1
+        if exit_code:
+            raise RuntimeError(f"tmuxp load failed with exit code {exit_code}") from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -150,9 +161,6 @@ def main(argv: list[str] | None = None) -> int:
     except (GrpcClientError, RuntimeError) as exc:
         print(f"RUNTIME ERROR: {exc}", file=sys.stderr)
         return 5
-    except subprocess.CalledProcessError as exc:
-        print(f"tmuxp load failed with exit code {exc.returncode}", file=sys.stderr)
-        return 6
 
 
 if __name__ == "__main__":

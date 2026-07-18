@@ -1,0 +1,104 @@
+name: Release standalone binary
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux-x86_64:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install '.[dev,build]'
+
+      - name: Run tests
+        run: |
+          python -m compileall -q src tests packaging freeplane_tmux.py
+          python -m pytest -q
+          ruff check .
+
+      - name: Build standalone executable
+        run: |
+          pyinstaller --noconfirm --clean packaging/freeplane-tmux.spec
+          chmod +x dist/freeplane-tmux-linux-x86_64
+
+      - name: Smoke-test executable
+        run: |
+          dist/freeplane-tmux-linux-x86_64 --help
+          tmpdir="$(mktemp -d)"
+          dist/freeplane-tmux-linux-x86_64 \
+            --map-json examples/example-map.json \
+            --output-dir "$tmpdir"
+          test -s "$tmpdir/demo.map.json"
+          test -s "$tmpdir/demo.tmuxp.yaml"
+
+      - name: Verify external gRPC stubs remain loadable
+        run: |
+          stubdir="$(mktemp -d)"
+          cat > "$stubdir/freeplane_pb2.py" <<'PY'
+          class MindMapToJSONRequest:
+              pass
+
+          class GroovyRequest:
+              def __init__(self, **kwargs):
+                  self.kwargs = kwargs
+          PY
+          cat > "$stubdir/freeplane_pb2_grpc.py" <<'PY'
+          class FreeplaneStub:
+              def __init__(self, channel):
+                  self.channel = channel
+          PY
+
+          set +e
+          output="$(dist/freeplane-tmux-linux-x86_64 \
+            --grpc-stubs-dir "$stubdir" \
+            --addr 127.0.0.1:1 \
+            --timeout 0.05 2>&1)"
+          status=$?
+          set -e
+
+          printf '%s\n' "$output"
+          test "$status" -eq 5
+          grep -q "did not become ready" <<<"$output"
+          ! grep -q "cannot import freeplane_pb2" <<<"$output"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: freeplane-tmux-linux-x86_64
+          path: dist/freeplane-tmux-linux-x86_64
+          if-no-files-found: error
+
+      - name: Publish GitHub Release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              dist/freeplane-tmux-linux-x86_64 \
+              --clobber
+          else
+            gh release create "$TAG" \
+              dist/freeplane-tmux-linux-x86_64 \
+              --verify-tag \
+              --generate-notes \
+              --title "$TAG"
+          fi

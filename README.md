@@ -19,6 +19,18 @@ The project treats the mindmap as a small declarative execution language: `WINDO
 
 ## Requirements
 
+For the standalone release binary:
+
+- Linux x86_64 with glibc compatible with Ubuntu 22.04 or newer
+- `tmux`
+- Freeplane with `freeplane_plugin_grpc` installed and running
+- The generated Freeplane gRPC Python stubs listed below
+
+Python is **not** required for the standalone binary. `tmuxp`, grpcio, Protobuf,
+Pydantic, PyYAML, and their Python runtime are bundled into the executable.
+
+For installation from source:
+
 - Linux or another POSIX environment with `tmux`
 - Python 3.10+
 - Freeplane with `freeplane_plugin_grpc` installed and running
@@ -27,7 +39,36 @@ The project treats the mindmap as a small declarative execution language: `WINDO
   - `freeplane_pb2_grpc.py`
 - Bash on hosts where alias/bootstrap context is used
 
-`tmuxp`, `grpcio`, Pydantic, Protobuf, and PyYAML are installed as Python dependencies.
+When installed from source, `tmuxp`, `grpcio`, Pydantic, Protobuf, and PyYAML are installed as Python dependencies.
+
+## Standalone Linux binary
+
+Every tag matching `v*` runs `.github/workflows/release-binary.yml`. The workflow
+builds one `freeplane-tmux-linux-x86_64` executable with PyInstaller, runs the
+full tests and a frozen-binary smoke test, then attaches that executable directly
+to the corresponding GitHub Release. A manual `workflow_dispatch` run builds the
+same downloadable Actions artifact without creating a release.
+
+Install a released binary without Python:
+
+```bash
+chmod +x freeplane-tmux-linux-x86_64
+sudo install -m 0755 freeplane-tmux-linux-x86_64 /usr/local/bin/freeplane-tmux
+freeplane-tmux --help
+```
+
+Create a release:
+
+```bash
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
+The executable is intentionally Linux x86_64 only, so the release contains one
+binary rather than a platform matrix. `tmux` remains an external system
+dependency; the Python implementation of tmuxp is embedded and `--load` does not
+look for a separate `tmuxp` executable. The project pins the tmuxp 1.74 minor
+line because the bundled integration calls its Python CLI directly.
 
 ## Installation
 

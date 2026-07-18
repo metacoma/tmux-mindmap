@@ -28,13 +28,16 @@ dependencies = [
   "protobuf>=4.25",
   "pydantic>=2.7,<3",
   "PyYAML>=6.0",
-  "tmuxp>=1.50",
+  "tmuxp>=1.74,<1.75",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8",
   "ruff>=0.6",
+]
+build = [
+  "pyinstaller>=6.21,<7",
 ]
 
 [project.scripts]
