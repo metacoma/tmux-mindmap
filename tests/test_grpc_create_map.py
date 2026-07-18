@@ -52,7 +52,8 @@ def _install_fake_grpc(monkeypatch, *, response: object):
 
     pb2 = SimpleNamespace(GroovyRequest=lambda **kwargs: SimpleNamespace(**kwargs))
     pb2_grpc = SimpleNamespace(FreeplaneStub=Stub)
-    monkeypatch.setattr("freeplane_tmux.grpc_client._load_stubs", lambda explicit: (pb2, pb2_grpc))
+    calls["pb2"] = pb2
+    calls["pb2_grpc"] = pb2_grpc
     return calls
 
 
@@ -63,6 +64,10 @@ def test_create_live_map_calls_groovy(monkeypatch) -> None:
         error_message="",
     )
     calls = _install_fake_grpc(monkeypatch, response=response)
+    monkeypatch.setattr(
+        "freeplane_tmux.grpc_client._load_stubs",
+        lambda explicit=None: (calls["pb2"], calls["pb2_grpc"]),
+    )
 
     result = create_live_map(
         address="freeplane.example:50052",
@@ -81,7 +86,11 @@ def test_create_live_map_calls_groovy(monkeypatch) -> None:
 
 def test_create_live_map_reports_groovy_failure(monkeypatch) -> None:
     response = SimpleNamespace(success=False, result="", error_message="permission denied")
-    _install_fake_grpc(monkeypatch, response=response)
+    calls = _install_fake_grpc(monkeypatch, response=response)
+    monkeypatch.setattr(
+        "freeplane_tmux.grpc_client._load_stubs",
+        lambda explicit=None: (calls["pb2"], calls["pb2_grpc"]),
+    )
 
     with pytest.raises(GrpcClientError, match="permission denied"):
         create_live_map(
@@ -100,3 +109,12 @@ def test_create_live_map_rejects_empty_name() -> None:
             grpc_stubs_dir=None,
             map_name="   ",
         )
+
+
+def test_load_stubs_returns_bundled_modules() -> None:
+    from freeplane_tmux.grpc_client import _load_stubs
+
+    pb2, pb2_grpc = _load_stubs(None)
+
+    assert pb2.GroovyRequest(groovy_code="x").groovy_code == "x"
+    assert hasattr(pb2_grpc.FreeplaneStub, "__init__")

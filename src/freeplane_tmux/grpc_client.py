@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-import importlib
 import json
-import os
-import sys
 from pathlib import Path
-from types import ModuleType
 from typing import Any
 
 from .models import RawNode
 from .text import sanitize_details_text
+from .vendor import freeplane_pb2, freeplane_pb2_grpc
 
 
 class GrpcClientError(RuntimeError):
@@ -36,60 +33,9 @@ def _extract_json_value(value: str) -> Any | None:
     return None
 
 
-def _candidate_stub_directories(explicit: Path | None) -> list[Path]:
-    candidates: list[Path] = []
-    if explicit is not None:
-        candidates.append(explicit.expanduser())
 
-    configured = os.environ.get("FREEPLANE_GRPC_PYTHON_PATH")
-    if configured:
-        candidates.append(Path(configured).expanduser())
-
-    cwd = Path.cwd()
-    package_dir = Path(__file__).resolve().parent
-    project_root = package_dir.parents[1]
-    launcher_dir = Path(sys.argv[0]).expanduser().resolve().parent
-    candidates.extend(
-        [
-            cwd,
-            cwd / "grpc" / "python",
-            cwd / "freeplane_plugin_grpc" / "grpc" / "python",
-            launcher_dir,
-            package_dir,
-            project_root,
-            project_root / "grpc" / "python",
-        ]
-    )
-    return candidates
-
-
-def _load_stubs(explicit: Path | None) -> tuple[ModuleType, ModuleType]:
-    failures: list[str] = []
-    seen: set[Path] = set()
-    for directory in _candidate_stub_directories(explicit):
-        resolved_directory = directory.resolve()
-        if resolved_directory in seen or not resolved_directory.exists():
-            continue
-        seen.add(resolved_directory)
-        path = str(resolved_directory)
-        if path not in sys.path:
-            sys.path.insert(0, path)
-        try:
-            pb2 = importlib.import_module("freeplane_pb2")
-            pb2_grpc = importlib.import_module("freeplane_pb2_grpc")
-            return pb2, pb2_grpc
-        except ImportError as exc:
-            sys.modules.pop("freeplane_pb2", None)
-            sys.modules.pop("freeplane_pb2_grpc", None)
-            failures.append(f"{resolved_directory}: {exc}")
-
-    details = "\n".join(failures)
-    suffix = f"\nTried:\n{details}" if details else ""
-    raise GrpcClientError(
-        "cannot import freeplane_pb2.py and freeplane_pb2_grpc.py. "
-        "Pass --grpc-stubs-dir or set FREEPLANE_GRPC_PYTHON_PATH to "
-        "freeplane_plugin_grpc/grpc/python." + suffix
-    )
+def _load_stubs(_: Path | None = None):
+    return freeplane_pb2, freeplane_pb2_grpc
 
 
 def _iter_node_ids(root: RawNode) -> list[str]:

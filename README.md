@@ -81,7 +81,6 @@ python3 -m pip install .
 Install the Freeplane plugin from `metacoma/freeplane_plugin_grpc`, then point this tool at its generated Python stubs:
 
 ```bash
-export FREEPLANE_GRPC_PYTHON_PATH="$HOME/git/freeplane_plugin_grpc/grpc/python"
 ```
 
 The same directory can be supplied explicitly:
@@ -319,3 +318,8 @@ The tests cover relationship leaf and subtree expansion, window-root relationshi
 ## License
 
 MIT
+
+
+## Bundled gRPC stubs
+
+`freeplane_pb2.py` and `freeplane_pb2_grpc.py` are bundled into the wheel and onefile binary, so runtime access to `metacoma/freeplane_plugin_grpc/grpc/python` is no longer required. The bundled stubs are derived from the upstream `freeplane.proto` definitions and cover the RPCs used by this project (`Groovy` and `MindMapToJSON`).
