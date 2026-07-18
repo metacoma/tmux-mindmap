@@ -22,7 +22,7 @@ def test_map_local_script_contains_dynamic_binary_path() -> None:
 
     assert "// @ExecutionModes({ON_SELECTED_NODE})" in script
     assert "--_launch-gui-terminal" in script
-    assert "--terminal-command-b64" in script
+    assert "--terminal-part" in script
     assert "binaryFile.absolutePath" in script
     assert "/opt/freeplane-tmux/bin/freeplane-tmux" in script
     assert 'terminalParts = ["gnome-terminal", "--"]' in script
@@ -36,6 +36,9 @@ def test_create_map_groovy_quotes_untrusted_name_and_sets_script1() -> None:
     assert script.count("newMap.name = mapName") == 1
     assert 'newMap.name = "injected"' not in script
     assert "newMap.root['script1'] = launcherScript" in script
+    assert 'def helloWindow = newMap.root.createChild("hello-win")' in script
+    assert 'helloWindow.tags.add("WINDOW")' in script
+    assert 'helloWindow.createChild("echo hello world")' in script
     assert "launcherScriptBase64 = " in script
     assert "/tmp/freeplane-tmux" not in script
     assert "gnome-terminal" not in script
@@ -108,6 +111,9 @@ def test_create_live_map_calls_groovy(monkeypatch) -> None:
     assert calls["rpc_timeout"] == 3.5
     assert "c.newMap()" in calls["request"].groovy_code
     assert "newMap.root['script1'] = launcherScript" in calls["request"].groovy_code
+    assert 'def helloWindow = newMap.root.createChild("hello-win")' in calls["request"].groovy_code
+    assert 'helloWindow.tags.add("WINDOW")' in calls["request"].groovy_code
+    assert 'helloWindow.createChild("echo hello world")' in calls["request"].groovy_code
     assert "launcherScriptBase64" in calls["request"].groovy_code
     assert "/tmp/freeplane-tmux" not in calls["request"].groovy_code
     assert "gnome-terminal" not in calls["request"].groovy_code
@@ -165,28 +171,6 @@ def test_create_live_map_rejects_invalid_terminal_command() -> None:
             terminal_command='unclosed "quote',
         )
 
-
-
-
-def test_vendor_proto_uses_message_factory_fallback(monkeypatch) -> None:
-    import freeplane_tmux.vendor.freeplane_pb2 as vendor_pb2
-
-    calls: list[str] = []
-
-    class DummyFactory:
-        def GetPrototype(self, descriptor):
-            calls.append(descriptor.name)
-
-            class DummyMessage:
-                __name__ = descriptor.name
-
-            return DummyMessage
-
-    monkeypatch.delattr(vendor_pb2._message_factory, "GetMessageClass", raising=False)
-    monkeypatch.setattr(vendor_pb2._message_factory, "MessageFactory", DummyFactory)
-
-    assert vendor_pb2._message_class("GroovyRequest").__name__ == "DummyMessage"
-    assert calls == ["GroovyRequest"]
 
 def test_load_stubs_returns_bundled_modules() -> None:
     from freeplane_tmux.grpc_client import _load_stubs

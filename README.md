@@ -97,10 +97,6 @@ If `--create-terminal` is omitted, the embedded launcher defaults to:
 x-terminal-emulator -e
 ```
 
-A small `scripts/freeplane_tmux_launcher.sh` file is still included only as a
-compatibility shim for already-created maps that still reference it. New maps do
-not depend on that shell script anymore.
-
 ## Create a new Freeplane map
 
 Create a new unsaved map in the running Freeplane instance with `--create-map`:
@@ -115,7 +111,7 @@ The installed command and standalone binary use the same syntax:
 freeplane-tmux --host 127.0.0.1 --port 50051 --create-map Operations
 ```
 
-The new map name and root-node text are both set to `Operations`. The root node also receives a map-local `script1` attribute that starts the current `freeplane-tmux` executable directly and opens the configured GUI terminal before running `--load`. This mode exits after creation and does not export or load a tmuxp session. Map names containing spaces must be quoted.
+The new map name and root-node text are both set to `Operations`. The root node receives a map-local `script1` attribute that starts the current `freeplane-tmux` executable directly and opens the configured GUI terminal before running `--load`. The created map also contains a starter window subtree: `hello-win` tagged with `WINDOW`, with one child node `echo hello world`. This mode exits after creation and does not export or load a tmuxp session. Map names containing spaces must be quoted.
 
 ## Usage
 

@@ -12,9 +12,7 @@ from .errors import SemanticError
 from .launcher import (
     INSIDE_TERMINAL_FLAG,
     LAUNCH_GUI_FLAG,
-    TERMINAL_COMMAND_B64_FLAG,
     TERMINAL_PART_FLAG,
-    decode_terminal_command,
     launch_gui_terminal,
     pause_for_terminal_exit,
 )
@@ -121,11 +119,6 @@ def build_parser() -> argparse.ArgumentParser:
         INSIDE_TERMINAL_FLAG,
         dest="inside_terminal",
         action="store_true",
-        help=argparse.SUPPRESS,
-    )
-    parser.add_argument(
-        TERMINAL_COMMAND_B64_FLAG,
-        dest="terminal_command_b64",
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
@@ -253,29 +246,12 @@ def _rebuild_cli_args(args: argparse.Namespace) -> list[str]:
     return rebuilt
 
 
-
-
-def _hidden_terminal_command(args: argparse.Namespace) -> str | None:
-    if args.terminal_command_b64:
-        return decode_terminal_command(args.terminal_command_b64)
-    if args.terminal_parts:
-        normalized: list[str] = []
-        for item in args.terminal_parts:
-            if isinstance(item, str):
-                normalized.append(item)
-            elif item == []:
-                normalized.append("--")
-            else:
-                raise RuntimeError("invalid hidden terminal arguments")
-        return " ".join(normalized)
-    return None
-
 def _run_main(args: argparse.Namespace) -> int:
     _validate_mode_combinations(args)
     if args.launch_gui_terminal:
         launch_gui_terminal(
             binary_path=_current_binary_path(),
-            terminal_command=_hidden_terminal_command(args),
+            terminal_command=(" ".join(args.terminal_parts) if args.terminal_parts else None),
             inner_argv=_rebuild_cli_args(args),
         )
         return 0

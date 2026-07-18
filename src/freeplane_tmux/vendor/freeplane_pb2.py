@@ -71,34 +71,16 @@ for method_name, input_type, output_type in (
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(fdp.SerializeToString())
 
-
-def _message_class(name: str):
-    descriptor = DESCRIPTOR.message_types_by_name[name]
-    get_message_class = getattr(_message_factory, "GetMessageClass", None)
-    if get_message_class is not None:
-        return get_message_class(descriptor)
-
-    factory_cls = getattr(_message_factory, "MessageFactory", None)
-    if factory_cls is None:
-        raise AttributeError(
-            "google.protobuf.message_factory does not provide "
-            "a supported message-class API"
-        )
-
-    factory = factory_cls()
-    get_prototype = getattr(factory, "GetPrototype", None)
-    if get_prototype is None:
-        raise AttributeError(
-            "google.protobuf.message_factory provides neither GetMessageClass "
-            "nor MessageFactory.GetPrototype"
-        )
-    return get_prototype(descriptor)
-
-
-GroovyRequest = _message_class("GroovyRequest")
-GroovyResponse = _message_class("GroovyResponse")
-MindMapToJSONRequest = _message_class("MindMapToJSONRequest")
-MindMapToJSONResponse = _message_class("MindMapToJSONResponse")
+GroovyRequest = _message_factory.GetMessageClass(DESCRIPTOR.message_types_by_name["GroovyRequest"])
+GroovyResponse = _message_factory.GetMessageClass(
+    DESCRIPTOR.message_types_by_name["GroovyResponse"]
+)
+MindMapToJSONRequest = _message_factory.GetMessageClass(
+    DESCRIPTOR.message_types_by_name["MindMapToJSONRequest"]
+)
+MindMapToJSONResponse = _message_factory.GetMessageClass(
+    DESCRIPTOR.message_types_by_name["MindMapToJSONResponse"]
+)
 
 _sym_db.RegisterMessage(GroovyRequest)
 _sym_db.RegisterMessage(GroovyResponse)

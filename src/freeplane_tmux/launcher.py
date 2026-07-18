@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import os
 import shlex
 import shutil
@@ -12,7 +11,6 @@ DEFAULT_TERMINAL_COMMAND = "x-terminal-emulator -e"
 INSIDE_TERMINAL_FLAG = "--_freeplane-tmux-inside-terminal"
 LAUNCH_GUI_FLAG = "--_launch-gui-terminal"
 TERMINAL_PART_FLAG = "--terminal-part"
-TERMINAL_COMMAND_B64_FLAG = "--terminal-command-b64"
 PAUSE_ON_ERROR = True
 
 
@@ -26,19 +24,6 @@ def _command_exists(command_name: str) -> bool:
         return Path(command_name).expanduser().is_file() and os.access(command_name, os.X_OK)
     return shutil.which(command_name) is not None
 
-
-
-
-def encode_terminal_command(command: str | None) -> str:
-    raw = command if command is not None else ""
-    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii")
-
-
-def decode_terminal_command(encoded: str) -> str:
-    try:
-        return base64.urlsafe_b64decode(encoded.encode("ascii")).decode("utf-8")
-    except Exception as exc:
-        raise RuntimeError("invalid encoded terminal command") from exc
 
 def split_terminal_command(command: str | None) -> list[str]:
     raw_command = command if command is not None else DEFAULT_TERMINAL_COMMAND

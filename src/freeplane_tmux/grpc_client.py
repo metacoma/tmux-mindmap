@@ -6,7 +6,6 @@ import shlex
 from pathlib import Path
 from typing import Any
 
-from .launcher import TERMINAL_COMMAND_B64_FLAG, encode_terminal_command
 from .models import RawNode
 from .text import sanitize_details_text
 from .vendor import freeplane_pb2, freeplane_pb2_grpc
@@ -91,21 +90,15 @@ def _map_local_script(
     terminal_command: str | None = None,
 ) -> str:
     binary_json = json.dumps(launcher_binary_path, ensure_ascii=False)
-    terminal_command_b64_json = json.dumps(
-        encode_terminal_command(terminal_command), ensure_ascii=False
-    )
     terminal_parts = shlex.split(terminal_command or "")
     terminal_parts_json = json.dumps(terminal_parts, ensure_ascii=False)
-    terminal_command_flag_json = json.dumps(TERMINAL_COMMAND_B64_FLAG, ensure_ascii=False)
     return f"""
 // @ExecutionModes({{ON_SELECTED_NODE}})
 // @Permission_granted EXEC("execute external process")
 // @Permission_granted READ("read files")
 
 def freeplaneTmuxBinary = {binary_json}
-def terminalCommandB64 = {terminal_command_b64_json}
 def terminalParts = {terminal_parts_json}
-def terminalCommandFlag = {terminal_command_flag_json}
 
 def binaryFile = new File(freeplaneTmuxBinary)
 if (!binaryFile.isFile()) {{
@@ -123,12 +116,8 @@ if (!hasGui) {{
 }}
 
 def cmd = [binaryFile.absolutePath, "--_launch-gui-terminal", "--load"]
-if (terminalCommandB64) {{
-    cmd.add(terminalCommandFlag + "=" + terminalCommandB64)
-}} else {{
-    terminalParts.each {{
-        cmd.add("--terminal-part=" + it.toString())
-    }}
+terminalParts.each {{
+    cmd.add("--terminal-part=" + it.toString())
 }}
 def pb = new ProcessBuilder(cmd.collect {{ it.toString() }})
 pb.redirectErrorStream(true)
@@ -161,6 +150,9 @@ if (newMap == null) {{
 newMap.name = mapName
 newMap.root.text = mapName
 newMap.root['script1'] = launcherScript
+def helloWindow = newMap.root.createChild("hello-win")
+helloWindow.tags.add("WINDOW")
+helloWindow.createChild("echo hello world")
 return JsonOutput.toJson([
     name: newMap.name,
     root_text: newMap.root.text,
