@@ -94,6 +94,45 @@ freeplane-tmux \
 
 The tool also searches the current directory, the launcher directory, and common `grpc/python` paths in a source checkout.
 
+## Freeplane terminal launcher
+
+The repository includes `scripts/freeplane_tmux_launcher.sh` for invoking the
+standalone executable from a Freeplane Groovy action. The terminal invocation is
+intentionally explicit at the beginning of the file:
+
+```bash
+TERMINAL=(x-terminal-emulator -e)
+```
+
+There is no hidden terminal-emulator detection. Change that single Bash array to
+match the local terminal, for example:
+
+```bash
+TERMINAL=(gnome-terminal --)
+# TERMINAL=(konsole -e)
+# TERMINAL=(kitty --)
+```
+
+The command launched inside the terminal is also explicit:
+
+```bash
+FREEPLANE_TMUX=(/usr/local/bin/freeplane-tmux --load)
+```
+
+Install the launcher at the path referenced by the Freeplane Groovy script and
+make it executable:
+
+```bash
+install -m 0755 \
+  scripts/freeplane_tmux_launcher.sh \
+  /path/used/by/freeplane/freeplane_tmux_launcher.sh
+```
+
+The script starts the terminal asynchronously so the Freeplane UI is not blocked.
+It re-executes itself inside the new terminal instead of assembling a quoted
+`bash -lc` string. On failure, the terminal remains open and the launch log is
+written to `${XDG_RUNTIME_DIR:-/tmp}/freeplane-tmux-launcher.log`.
+
 ## Usage
 
 Generate JSON and tmuxp YAML from the live Freeplane map:

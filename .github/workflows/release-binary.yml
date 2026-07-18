@@ -30,6 +30,7 @@ jobs:
       - name: Run tests
         run: |
           python -m compileall -q src tests packaging freeplane_tmux.py
+          bash -n scripts/freeplane_tmux_launcher.sh
           python -m pytest -q
           ruff check .
 
