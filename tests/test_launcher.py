@@ -72,6 +72,13 @@ def test_launch_gui_terminal_requires_gui(monkeypatch, tmp_path: Path) -> None:
         )
 
 
+
+
+def test_normalize_terminal_parts_handles_python310_dash_dash() -> None:
+    from freeplane_tmux.cli import _normalize_terminal_parts
+
+    assert _normalize_terminal_parts(["gnome-terminal", []]) == ["gnome-terminal", "--"]
+
 def test_hidden_launch_mode_rebuilds_load_args(monkeypatch) -> None:
     captured: list[dict[str, object]] = []
 

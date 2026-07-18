@@ -214,6 +214,22 @@ def _run_tmuxp(path: Path, *, detached: bool) -> None:
             raise RuntimeError(f"tmuxp load failed with exit code {exit_code}") from exc
 
 
+def _normalize_terminal_parts(parts: list[object]) -> list[str]:
+    normalized: list[str] = []
+    for part in parts:
+        if isinstance(part, str):
+            normalized.append(part)
+            continue
+        if isinstance(part, (list, tuple)):
+            if not part:
+                normalized.append("--")
+                continue
+            normalized.extend(str(item) for item in part)
+            continue
+        normalized.append(str(part))
+    return normalized
+
+
 def _rebuild_cli_args(args: argparse.Namespace) -> list[str]:
     rebuilt: list[str] = []
     if args.addr:
@@ -249,9 +265,10 @@ def _rebuild_cli_args(args: argparse.Namespace) -> list[str]:
 def _run_main(args: argparse.Namespace) -> int:
     _validate_mode_combinations(args)
     if args.launch_gui_terminal:
+        terminal_parts = _normalize_terminal_parts(args.terminal_parts)
         launch_gui_terminal(
             binary_path=_current_binary_path(),
-            terminal_command=(" ".join(args.terminal_parts) if args.terminal_parts else None),
+            terminal_command=(" ".join(terminal_parts) if terminal_parts else None),
             inner_argv=_rebuild_cli_args(args),
         )
         return 0
