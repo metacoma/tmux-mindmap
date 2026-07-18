@@ -37,9 +37,10 @@ def test_create_map_groovy_quotes_untrusted_name_and_sets_script1() -> None:
     assert script.count("newMap.name = mapName") == 1
     assert 'newMap.name = "injected"' not in script
     assert "newMap.root['script1'] = launcherScript" in script
-    assert "launcherScript = " in script
-    assert "/tmp/freeplane-tmux" in script
-    assert "gnome-terminal" in script
+    assert "launcherScriptBase64 = " in script
+    assert "/tmp/freeplane-tmux" not in script
+    assert "gnome-terminal" not in script
+    assert "${shellScript.absolutePath}" not in script
 
 
 def _install_fake_grpc(monkeypatch, *, response: object):
@@ -108,8 +109,9 @@ def test_create_live_map_calls_groovy(monkeypatch) -> None:
     assert calls["rpc_timeout"] == 3.5
     assert "c.newMap()" in calls["request"].groovy_code
     assert "newMap.root['script1'] = launcherScript" in calls["request"].groovy_code
-    assert "/tmp/freeplane-tmux" in calls["request"].groovy_code
-    assert "gnome-terminal" in calls["request"].groovy_code
+    assert "launcherScriptBase64" in calls["request"].groovy_code
+    assert "/tmp/freeplane-tmux" not in calls["request"].groovy_code
+    assert "gnome-terminal" not in calls["request"].groovy_code
     assert calls["closed"] is True
 
 

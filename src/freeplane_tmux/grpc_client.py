@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import shlex
 from pathlib import Path
@@ -141,15 +142,16 @@ def _create_map_groovy(
     terminal_command: str | None = None,
 ) -> str:
     encoded_name = json.dumps(map_name, ensure_ascii=False)
-    encoded_script = json.dumps(
-        _map_local_script(launcher_binary_path, terminal_command),
-        ensure_ascii=False,
-    )
+    launcher_script_base64 = base64.b64encode(
+        _map_local_script(launcher_binary_path, terminal_command).encode("utf-8")
+    ).decode("ascii")
+    encoded_script_base64 = json.dumps(launcher_script_base64, ensure_ascii=False)
     return f"""
 import groovy.json.JsonOutput
 
 def mapName = {encoded_name}
-def launcherScript = {encoded_script}
+def launcherScriptBase64 = {encoded_script_base64}
+def launcherScript = new String(launcherScriptBase64.decodeBase64(), "UTF-8")
 def newMap = c.newMap()
 if (newMap == null) {{
     throw new IllegalStateException("Freeplane failed to create a new map")
