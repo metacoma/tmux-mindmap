@@ -133,6 +133,24 @@ It re-executes itself inside the new terminal instead of assembling a quoted
 `bash -lc` string. On failure, the terminal remains open and the launch log is
 written to `${XDG_RUNTIME_DIR:-/tmp}/freeplane-tmux-launcher.log`.
 
+## Create a new Freeplane map
+
+Pass a positional map name to create a new unsaved map in the running Freeplane instance:
+
+```bash
+./freeplane_tmux.py --host 127.0.0.1 --port 50051 Operations
+```
+
+The installed command and standalone binary use the same syntax:
+
+```bash
+freeplane-tmux --host 127.0.0.1 --port 50051 Operations
+```
+
+The new map name and root-node text are both set to `Operations`. This mode exits after
+creation and does not export or load a tmuxp session. Map names containing spaces must be
+quoted.
+
 ## Usage
 
 Generate JSON and tmuxp YAML from the live Freeplane map:

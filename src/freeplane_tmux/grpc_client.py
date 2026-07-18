@@ -138,6 +138,67 @@ def _apply_details(node: dict[str, Any], details_by_id: dict[str, Any]) -> None:
             _apply_details(child, details_by_id)
 
 
+def _create_map_groovy(map_name: str) -> str:
+    encoded_name = json.dumps(map_name, ensure_ascii=False)
+    return f"""
+import groovy.json.JsonOutput
+
+def mapName = {encoded_name}
+def newMap = c.newMap()
+if (newMap == null) {{
+    throw new IllegalStateException("Freeplane failed to create a new map")
+}}
+newMap.name = mapName
+newMap.root.text = mapName
+return JsonOutput.toJson([name: newMap.name, root_text: newMap.root.text])
+""".strip()
+
+
+def create_live_map(
+    *,
+    address: str,
+    timeout: float,
+    grpc_stubs_dir: Path | None,
+    map_name: str,
+) -> str:
+    """Create a new unsaved Freeplane map and return its effective name."""
+
+    normalized_name = map_name.strip()
+    if not normalized_name:
+        raise GrpcClientError("map name must not be empty")
+
+    try:
+        import grpc
+    except ImportError as exc:
+        raise GrpcClientError("grpcio is required for live Freeplane operations") from exc
+
+    pb2, pb2_grpc = _load_stubs(grpc_stubs_dir)
+    channel = grpc.insecure_channel(address)
+    try:
+        grpc.channel_ready_future(channel).result(timeout=timeout)
+        stub = pb2_grpc.FreeplaneStub(channel)
+        response = stub.Groovy(
+            pb2.GroovyRequest(groovy_code=_create_map_groovy(normalized_name)),
+            timeout=timeout,
+        )
+        if not getattr(response, "success", False):
+            error = getattr(response, "error_message", "") or "Groovy returned success=false"
+            raise GrpcClientError(f"cannot create Freeplane map: {error}")
+
+        result = _extract_json_value(getattr(response, "result", "") or "")
+        if isinstance(result, dict):
+            effective_name = str(result.get("name", "")).strip()
+            if effective_name:
+                return effective_name
+        return normalized_name
+    except grpc.FutureTimeoutError as exc:
+        raise GrpcClientError(
+            f"Freeplane gRPC server at {address} did not become ready within {timeout:g}s"
+        ) from exc
+    finally:
+        channel.close()
+
+
 def fetch_live_map(
     *,
     address: str,

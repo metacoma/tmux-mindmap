@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "freeplane-tmux"
-version = "0.1.0"
+version = "0.2.0"
 description = "Compile Freeplane mindmaps into tmuxp sessions through freeplane_plugin_grpc"
 readme = "README.md"
 requires-python = ">=3.10"

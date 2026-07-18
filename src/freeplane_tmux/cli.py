@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from .compiler import MindmapCompiler
 from .emitter import dump_tmuxp_yaml, session_to_tmuxp
 from .errors import SemanticError
-from .grpc_client import GrpcClientError, fetch_live_map
+from .grpc_client import GrpcClientError, create_live_map, fetch_live_map
 from .models import RawNode
 
 
@@ -24,6 +24,11 @@ def _slugify(value: str) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Export the Freeplane map root to tmuxp YAML and optionally load it."
+    )
+    parser.add_argument(
+        "map_name",
+        nargs="?",
+        help="Create a new unsaved Freeplane map with this name and exit",
     )
     parser.add_argument("--addr", help="Freeplane gRPC address, e.g. 127.0.0.1:50051")
     parser.add_argument("--host", help="Compatibility alias for the gRPC host")
@@ -74,6 +79,24 @@ def _resolve_address(args: argparse.Namespace) -> str:
     if args.addr:
         return args.addr
     return f"{args.host or '127.0.0.1'}:{args.port or 50051}"
+
+
+def _validate_create_mode(args: argparse.Namespace) -> None:
+    incompatible = {
+        "--output-dir": args.output_dir,
+        "--json-out": args.json_out,
+        "--yaml-out/--tmuxp-out": args.yaml_out,
+        "--load": args.load,
+        "--detached": args.detached,
+        "--no-groovy-details": args.no_groovy_details,
+        "--map-json": args.map_json,
+        "--selected-node-id": args.selected_node_id,
+        "--pretty": args.pretty,
+    }
+    used = [name for name, value in incompatible.items() if value]
+    if used:
+        flags = ", ".join(used)
+        raise ValueError(f"map creation mode cannot be combined with: {flags}")
 
 
 def _load_map(args: argparse.Namespace) -> tuple[RawNode, dict]:
@@ -133,6 +156,17 @@ def _run_tmuxp(path: Path, *, detached: bool) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.map_name is not None:
+            _validate_create_mode(args)
+            created_name = create_live_map(
+                address=_resolve_address(args),
+                timeout=args.timeout,
+                grpc_stubs_dir=args.grpc_stubs_dir,
+                map_name=args.map_name,
+            )
+            print(created_name)
+            return 0
+
         root, raw_data = _load_map(args)
         session = MindmapCompiler(root).compile()
         tmuxp_data = session_to_tmuxp(session)
