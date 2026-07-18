@@ -97,16 +97,8 @@ def _map_local_script(
 // @Permission_granted EXEC("execute external process")
 // @Permission_granted READ("read files")
 
-def shellScript = new File(System.getProperty("user.home"), "bin/freeplane_tmux_launcher.sh")
 def freeplaneTmuxBinary = {binary_json}
 def terminalParts = {terminal_parts_json}
-
-if (!shellScript.isFile()) {{
-    throw new RuntimeException("Shell script not found: ${{shellScript.absolutePath}}")
-}}
-if (!shellScript.canExecute()) {{
-    throw new RuntimeException("Shell script is not executable: ${{shellScript.absolutePath}}")
-}}
 
 def binaryFile = new File(freeplaneTmuxBinary)
 if (!binaryFile.isFile()) {{
@@ -123,10 +115,9 @@ if (!hasGui) {{
     throw new RuntimeException("No GUI display detected (DISPLAY/WAYLAND_DISPLAY is not set)")
 }}
 
-def cmd = [shellScript.absolutePath, "--freeplane-tmux-bin", binaryFile.absolutePath]
+def cmd = [binaryFile.absolutePath, "--_launch-gui-terminal", "--load"]
 terminalParts.each {{
-    cmd.add("--terminal-part")
-    cmd.add(it.toString())
+    cmd.add("--terminal-part=" + it.toString())
 }}
 def pb = new ProcessBuilder(cmd.collect {{ it.toString() }})
 pb.redirectErrorStream(true)

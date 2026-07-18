@@ -9,6 +9,13 @@ from pathlib import Path
 
 from . import __version__
 from .errors import SemanticError
+from .launcher import (
+    INSIDE_TERMINAL_FLAG,
+    LAUNCH_GUI_FLAG,
+    TERMINAL_PART_FLAG,
+    launch_gui_terminal,
+    pause_for_terminal_exit,
+)
 from .models import RawNode, RawValidationError
 
 
@@ -22,6 +29,7 @@ def fetch_live_map(*args, **kwargs):
     from .grpc_client import fetch_live_map as _fetch_live_map
 
     return _fetch_live_map(*args, **kwargs)
+
 
 def _slugify(value: str) -> str:
     text = re.sub(r"[^A-Za-z0-9._-]+", "-", (value or "").strip()).strip("-._")
@@ -101,6 +109,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Compatibility flag; ignored because the map root is always the session root",
     )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output")
+    parser.add_argument(
+        LAUNCH_GUI_FLAG,
+        dest="launch_gui_terminal",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        INSIDE_TERMINAL_FLAG,
+        dest="inside_terminal",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        TERMINAL_PART_FLAG,
+        dest="terminal_parts",
+        action="append",
+        default=[],
+        help=argparse.SUPPRESS,
+    )
     return parser
 
 
@@ -187,54 +214,107 @@ def _run_tmuxp(path: Path, *, detached: bool) -> None:
             raise RuntimeError(f"tmuxp load failed with exit code {exit_code}") from exc
 
 
+def _rebuild_cli_args(args: argparse.Namespace) -> list[str]:
+    rebuilt: list[str] = []
+    if args.addr:
+        rebuilt.extend(["--addr", args.addr])
+    else:
+        if args.host:
+            rebuilt.extend(["--host", args.host])
+        if args.port is not None:
+            rebuilt.extend(["--port", str(args.port)])
+    if args.timeout != 10.0:
+        rebuilt.extend(["--timeout", str(args.timeout)])
+    if args.output_dir:
+        rebuilt.extend(["--output-dir", args.output_dir])
+    if args.json_out:
+        rebuilt.extend(["--json-out", args.json_out])
+    if args.yaml_out:
+        rebuilt.extend(["--yaml-out", args.yaml_out])
+    if args.load:
+        rebuilt.append("--load")
+    if args.detached:
+        rebuilt.append("--detached")
+    if args.no_groovy_details:
+        rebuilt.append("--no-groovy-details")
+    if args.map_json:
+        rebuilt.extend(["--map-json", args.map_json])
+    if args.selected_node_id:
+        rebuilt.extend(["--selected-node-id", args.selected_node_id])
+    if args.pretty:
+        rebuilt.append("--pretty")
+    return rebuilt
+
+
+def _run_main(args: argparse.Namespace) -> int:
+    _validate_mode_combinations(args)
+    if args.launch_gui_terminal:
+        launch_gui_terminal(
+            binary_path=_current_binary_path(),
+            terminal_command=(" ".join(args.terminal_parts) if args.terminal_parts else None),
+            inner_argv=_rebuild_cli_args(args),
+        )
+        return 0
+
+    if args.create is not None:
+        _validate_create_mode(args)
+        created_name = create_live_map(
+            address=_resolve_address(args),
+            timeout=args.timeout,
+            grpc_stubs_dir=args.grpc_stubs_dir,
+            map_name=args.create,
+            launcher_binary_path=_current_binary_path(),
+            terminal_command=args.create_terminal,
+        )
+        print(created_name)
+        return 0
+
+    root, raw_data = _load_map(args)
+    from .compiler import MindmapCompiler
+    from .emitter import dump_tmuxp_yaml, session_to_tmuxp
+
+    session = MindmapCompiler(root).compile()
+    tmuxp_data = session_to_tmuxp(session)
+    json_path, yaml_path = _output_paths(args, session.session_name)
+
+    indent = 2 if args.pretty else None
+    _write_text(
+        json_path,
+        json.dumps(raw_data, ensure_ascii=False, indent=indent) + "\n",
+    )
+    _write_text(yaml_path, dump_tmuxp_yaml(tmuxp_data))
+
+    print(yaml_path)
+    if args.load:
+        _run_tmuxp(yaml_path, detached=args.detached)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    exit_code = 0
     try:
-        _validate_mode_combinations(args)
-        if args.create is not None:
-            _validate_create_mode(args)
-            created_name = create_live_map(
-                address=_resolve_address(args),
-                timeout=args.timeout,
-                grpc_stubs_dir=args.grpc_stubs_dir,
-                map_name=args.create,
-                launcher_binary_path=_current_binary_path(),
-                terminal_command=args.create_terminal,
-            )
-            print(created_name)
-            return 0
-
-        root, raw_data = _load_map(args)
-        from .compiler import MindmapCompiler
-        from .emitter import dump_tmuxp_yaml, session_to_tmuxp
-
-        session = MindmapCompiler(root).compile()
-        tmuxp_data = session_to_tmuxp(session)
-        json_path, yaml_path = _output_paths(args, session.session_name)
-
-        indent = 2 if args.pretty else None
-        _write_text(
-            json_path,
-            json.dumps(raw_data, ensure_ascii=False, indent=indent) + "\n",
-        )
-        _write_text(yaml_path, dump_tmuxp_yaml(tmuxp_data))
-
-        print(yaml_path)
-        if args.load:
-            _run_tmuxp(yaml_path, detached=args.detached)
-        return 0
+        exit_code = _run_main(args)
+        return exit_code
     except RawValidationError as exc:
         print(f"RAW VALIDATION ERROR:\n{exc}", file=sys.stderr)
-        return 2
+        exit_code = 2
+        return exit_code
     except SemanticError as exc:
         print(f"SEMANTIC VALIDATION ERROR:\n{exc}", file=sys.stderr)
-        return 3
+        exit_code = 3
+        return exit_code
     except (json.JSONDecodeError, ValueError) as exc:
         print(f"JSON ERROR: {exc}", file=sys.stderr)
-        return 4
+        exit_code = 4
+        return exit_code
     except RuntimeError as exc:
         print(f"RUNTIME ERROR: {exc}", file=sys.stderr)
-        return 5
+        exit_code = 5
+        return exit_code
+    finally:
+        if args.inside_terminal:
+            pause_for_terminal_exit(exit_code)
 
 
 if __name__ == "__main__":

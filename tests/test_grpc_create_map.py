@@ -21,8 +21,7 @@ def test_map_local_script_contains_dynamic_binary_path() -> None:
     )
 
     assert "// @ExecutionModes({ON_SELECTED_NODE})" in script
-    assert "bin/freeplane_tmux_launcher.sh" in script
-    assert "--freeplane-tmux-bin" in script
+    assert "--_launch-gui-terminal" in script
     assert "--terminal-part" in script
     assert "binaryFile.absolutePath" in script
     assert "/opt/freeplane-tmux/bin/freeplane-tmux" in script

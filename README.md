@@ -77,50 +77,29 @@ python3 -m pip install .
 
 Install the Freeplane plugin from `metacoma/freeplane_plugin_grpc`. No external Python stubs are needed anymore; the project bundles the required gRPC modules into both the wheel and the standalone binary.
 
-## Freeplane terminal launcher
+## Embedded GUI terminal launcher
 
-The repository includes `scripts/freeplane_tmux_launcher.sh` for invoking the
-standalone executable from a Freeplane Groovy action. The terminal invocation is
-intentionally explicit at the beginning of the file:
+The GUI-terminal launcher now lives inside `freeplane-tmux` itself.
+`script1` created by `--create-map` starts the current `freeplane-tmux` binary
+directly in a hidden launcher mode, which then opens the configured terminal and
+re-runs itself inside that terminal with `--load`.
 
-```bash
-TERMINAL=(x-terminal-emulator -e)
-```
-
-There is no hidden terminal-emulator detection. Change that single Bash array to
-match the local terminal, for example:
+`--create-terminal` sets the terminal command itself, for example:
 
 ```bash
-TERMINAL=(gnome-terminal --)
-# TERMINAL=(konsole -e)
-# TERMINAL=(kitty --)
+freeplane-tmux --create-map Operations --create-terminal "gnome-terminal --"
+freeplane-tmux --create-map Operations --create-terminal "xterm -e"
 ```
 
-The command launched inside the terminal is also explicit by default:
+If `--create-terminal` is omitted, the embedded launcher defaults to:
 
 ```bash
-FREEPLANE_TMUX_DEFAULT=(/usr/local/bin/freeplane-tmux --load)
+x-terminal-emulator -e
 ```
 
-Map-local scripts created by `--create-map` override the binary path dynamically via:
-
-```bash
---freeplane-tmux-bin /path/to/the/current/freeplane-tmux-binary
-```
-
-Install the launcher at the path referenced by the Freeplane Groovy script and
-make it executable:
-
-```bash
-install -m 0755 \
-  scripts/freeplane_tmux_launcher.sh \
-  /path/used/by/freeplane/freeplane_tmux_launcher.sh
-```
-
-The script starts the terminal asynchronously so the Freeplane UI is not blocked.
-It re-executes itself inside the new terminal instead of assembling a quoted
-`bash -lc` string. On failure, the terminal remains open and the launch log is
-written to `${XDG_RUNTIME_DIR:-/tmp}/freeplane-tmux-launcher.log`.
+A small `scripts/freeplane_tmux_launcher.sh` file is still included only as a
+compatibility shim for already-created maps that still reference it. New maps do
+not depend on that shell script anymore.
 
 ## Create a new Freeplane map
 
@@ -136,13 +115,7 @@ The installed command and standalone binary use the same syntax:
 freeplane-tmux --host 127.0.0.1 --port 50051 --create-map Operations
 ```
 
-The new map name and root-node text are both set to `Operations`. You can optionally prepend a command before the GUI-terminal launch, for example:
-
-```bash
-freeplane-tmux --create-map Operations --create-terminal "setsid -f"
-```
-
-The root node also receives a map-local `script1` attribute that starts `~/bin/freeplane_tmux_launcher.sh` and passes the path to the current `freeplane-tmux` executable dynamically with `--freeplane-tmux-bin`; `--create-terminal` can override the GUI terminal command used by the launcher. This mode exits after creation and does not export or load a tmuxp session. Map names containing spaces must be quoted.
+The new map name and root-node text are both set to `Operations`. The root node also receives a map-local `script1` attribute that starts the current `freeplane-tmux` executable directly and opens the configured GUI terminal before running `--load`. This mode exits after creation and does not export or load a tmuxp session. Map names containing spaces must be quoted.
 
 ## Usage
 
