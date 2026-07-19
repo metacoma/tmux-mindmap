@@ -150,9 +150,15 @@ newMap.name = mapName
 newMap.root.text = mapName
 newMap.root['script1'] = launcherScript
 def helloWindow = newMap.root.createChild("hello-win")
+def helloCommand = helloWindow.createChild("echo hello world")
+// Force Freeplane to materialize stable node IDs immediately so subsequent
+// MindMapToJSON export contains ids for the starter branch.
+def helloWindowId = helloWindow.id
+def helloCommandId = helloCommand.id
 helloWindow.tags.add("WINDOW")
-helloWindow.createChild("echo hello world")
 return JsonOutput.toJson([
+    hello_window_id: helloWindowId,
+    hello_command_id: helloCommandId,
     name: newMap.name,
     root_text: newMap.root.text,
     script1: newMap.root['script1']?.toString(),

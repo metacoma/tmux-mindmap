@@ -36,8 +36,10 @@ def test_create_map_groovy_quotes_untrusted_name_and_sets_script1() -> None:
     assert 'newMap.name = "injected"' not in script
     assert "newMap.root['script1'] = launcherScript" in script
     assert 'def helloWindow = newMap.root.createChild("hello-win")' in script
+    assert 'def helloCommand = helloWindow.createChild("echo hello world")' in script
+    assert 'def helloWindowId = helloWindow.id' in script
+    assert 'def helloCommandId = helloCommand.id' in script
     assert 'helloWindow.tags.add("WINDOW")' in script
-    assert 'helloWindow.createChild("echo hello world")' in script
     assert "launcherScriptBase64 = " in script
     assert "/tmp/freeplane-tmux" not in script
     assert "gnome-terminal" not in script
@@ -111,8 +113,10 @@ def test_create_live_map_calls_groovy(monkeypatch) -> None:
     assert "c.newMap()" in calls["request"].groovy_code
     assert "newMap.root['script1'] = launcherScript" in calls["request"].groovy_code
     assert 'def helloWindow = newMap.root.createChild("hello-win")' in calls["request"].groovy_code
+    assert 'def helloCommand = helloWindow.createChild("echo hello world")' in calls["request"].groovy_code
+    assert 'def helloWindowId = helloWindow.id' in calls["request"].groovy_code
+    assert 'def helloCommandId = helloCommand.id' in calls["request"].groovy_code
     assert 'helloWindow.tags.add("WINDOW")' in calls["request"].groovy_code
-    assert 'helloWindow.createChild("echo hello world")' in calls["request"].groovy_code
     assert "launcherScriptBase64" in calls["request"].groovy_code
     assert "/tmp/freeplane-tmux" not in calls["request"].groovy_code
     assert "gnome-terminal" not in calls["request"].groovy_code
@@ -178,3 +182,16 @@ def test_load_stubs_returns_bundled_modules() -> None:
 
     assert pb2.GroovyRequest(groovy_code="x").groovy_code == "x"
     assert hasattr(pb2_grpc.FreeplaneStub, "__init__")
+
+
+
+def test_create_map_groovy_embeds_terminal_command_in_launcher_script() -> None:
+    import base64
+    import re
+
+    script = _create_map_groovy("ops", "/tmp/freeplane-tmux", "xterm -e")
+    match = re.search(r'launcherScriptBase64 = "([A-Za-z0-9+/=]+)"', script)
+    assert match, "launcherScriptBase64 assignment not found"
+    decoded = base64.b64decode(match.group(1)).decode("utf-8")
+    assert 'def terminalCommand = "xterm -e"' in decoded
+    assert 'def cmd = [binaryFile.absolutePath, "--launch-gui-terminal", "--load"]' in decoded

@@ -1,0 +1,48 @@
+WARNING: The directory '/home/oai/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+Looking in indexes: https://reader:****@packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/simple
+Processing /tmp/tmuxfix
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting grpcio>=1.60 (from freeplane-tmux==0.2.16)
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/f3/6c/2557c1a889363072fbf2285ecd0e8c44860d4dbd60f017a32537c5b863e2/grpcio-1.82.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (6.9 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.9/6.9 MB 38.6 MB/s eta 0:00:00
+Collecting protobuf>=4.25 (from freeplane-tmux==0.2.16)
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/e4/be/5b3cfe508bfab6761414ff944e3366eb13be4fd71efcd69450f89ba39f43/protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl (327 kB)
+Collecting pydantic<3,>=2.7 (from freeplane-tmux==0.2.16)
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/fd/7b/122376b1fd3c62c1ed9dc80c931ace4844b3c55407b6fb2d199377c9736f/pydantic-2.13.4-py3-none-any.whl (472 kB)
+Collecting PyYAML>=6.0 (from freeplane-tmux==0.2.16)
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/74/27/e5b8f34d02d9995b80abcef563ea1f8b56d20134d8f4e5e81733b1feceb2/pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (801 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 801.6/801.6 kB 64.3 MB/s eta 0:00:00
+Collecting tmuxp<1.75,>=1.74 (from freeplane-tmux==0.2.16)
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/1a/b7/61069c7aee3f60755059d79637ec6c69e8ab093dfff7c8cbbde9f950e1ce/tmuxp-1.74.0-py3-none-any.whl (108 kB)
+Collecting annotated-types>=0.6.0 (from pydantic<3,>=2.7->freeplane-tmux==0.2.16)
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl (13 kB)
+Collecting pydantic-core==2.46.4 (from pydantic<3,>=2.7->freeplane-tmux==0.2.16)
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/07/f8/41db9de19d7987d6b04715a02b3b40aea467000275d9d758ffaa31af7d50/pydantic_core-2.46.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 37.3 MB/s eta 0:00:00
+Collecting typing-extensions>=4.14.1 (from pydantic<3,>=2.7->freeplane-tmux==0.2.16)
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Collecting typing-inspection>=0.4.2 (from pydantic<3,>=2.7->freeplane-tmux==0.2.16)
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/dc/9b/47798a6c91d8bdb567fe2698fe81e0c6b7cb7ef4d13da4114b41d239f65d/typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+Collecting libtmux~=0.61.0 (from tmuxp<1.75,>=1.74->freeplane-tmux==0.2.16)
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/73/14/934d0d9076d1d46fcc71f3397daea7921363781674337084b15d1bbcbf84/libtmux-0.61.0-py3-none-any.whl (118 kB)
+Saved ./dist/pydantic-2.13.4-py3-none-any.whl
+Saved ./dist/pydantic_core-2.46.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+Saved ./dist/tmuxp-1.74.0-py3-none-any.whl
+Saved ./dist/libtmux-0.61.0-py3-none-any.whl
+Saved ./dist/annotated_types-0.7.0-py3-none-any.whl
+Saved ./dist/grpcio-1.82.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+Saved ./dist/typing_extensions-4.16.0-py3-none-any.whl
+Saved ./dist/protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl
+Saved ./dist/pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+Saved ./dist/typing_inspection-0.4.2-py3-none-any.whl
+Building wheels for collected packages: freeplane-tmux
+  Building wheel for freeplane-tmux (pyproject.toml): started
+  Building wheel for freeplane-tmux (pyproject.toml): finished with status 'done'
+  Created wheel for freeplane-tmux: filename=freeplane_tmux-0.2.16-py3-none-any.whl size=28508 sha256=43246260930957d27338f49c243ee622ab8faabc9b88590d2cf7fe90e8cfcdf7
+  Stored in directory: /tmp/pip-ephem-wheel-cache-ogv631ow/wheels/80/95/09/32b6fa67160845016461a4c6ffed4879eab688d967c26b2acf
+Successfully built freeplane-tmux
