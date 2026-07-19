@@ -15,7 +15,6 @@ The project treats the mindmap as a small declarative execution language: `WINDO
 - Supports scoped `ALIAS` declarations with late template resolution.
 - Rebuilds environment and aliases when an interactive command changes shell context through `ssh` or `sudo`.
 - Sanitizes Freeplane `detailsText` HTML through one centralized parser.
-- Keeps the CLI flags from the original single-file script.
 
 ## Requirements
 
@@ -77,41 +76,56 @@ python3 -m pip install .
 
 Install the Freeplane plugin from `metacoma/freeplane_plugin_grpc`. No external Python stubs are needed anymore; the project bundles the required gRPC modules into both the wheel and the standalone binary.
 
-## Embedded GUI terminal launcher
+## Direct GUI terminal launch from `script1`
 
-The GUI-terminal launcher now lives inside `freeplane-tmux` itself.
-`script1` created by `--create-map` starts the current `freeplane-tmux` binary
-directly in a hidden launcher mode, which then opens the configured terminal and
-re-runs itself inside that terminal with `--load`.
+`--create` and `--create-map` generate a map-local root `script1`. The script
+contains two precomputed argument lists:
 
-`--create-terminal` sets the terminal command itself, for example:
+1. the complete GUI terminal command;
+2. the `freeplane-tmux --load` command, including the selected gRPC address and
+   timeout.
+
+When the root script runs, Groovy verifies `DISPLAY`/`WAYLAND_DISPLAY`, checks the
+terminal and runtime executables, concatenates both lists, and starts the final
+command with `ProcessBuilder.start()`. It does not call a shell launcher, hidden
+CLI mode, or an intermediate `freeplane-tmux` process. The terminal starts the
+single runtime process that performs export, compilation, YAML emission, and
+`tmuxp load`.
+
+`--create-terminal` accepts the complete terminal command:
 
 ```bash
 freeplane-tmux --create-map Operations --create-terminal "gnome-terminal --"
 freeplane-tmux --create-map Operations --create-terminal "xterm -e"
+freeplane-tmux --create-map Operations --create-terminal "kitty --"
 ```
 
-If `--create-terminal` is omitted, the embedded launcher defaults to:
+If omitted, the generated script uses:
 
 ```bash
 x-terminal-emulator -e
 ```
 
+The Groovy process is launched in the background and writes terminal-startup
+errors to `$XDG_RUNTIME_DIR/freeplane-tmux.log` (or `/tmp/freeplane-tmux.log`).
+
 ## Create a new Freeplane map
 
-Create a new unsaved map in the running Freeplane instance with `--create-map`:
+Create a new unsaved map in the running Freeplane instance:
 
 ```bash
-./freeplane_tmux.py --host 127.0.0.1 --port 50051 --create-map Operations
+freeplane-tmux \
+  --addr 127.0.0.1:50051 \
+  --create-map Operations \
+  --create-terminal "gnome-terminal --"
 ```
 
-The installed command and standalone binary use the same syntax:
+`--create Operations` is an exact alias for `--create-map Operations`.
 
-```bash
-freeplane-tmux --host 127.0.0.1 --port 50051 --create-map Operations
-```
-
-The new map name and root-node text are both set to `Operations`. The root node receives a map-local `script1` attribute that starts the current `freeplane-tmux` executable directly and opens the configured GUI terminal before running `--load`. The created map also contains a starter window subtree: `hello-win` tagged with `WINDOW`, with one child node `echo hello world`. This mode exits after creation and does not export or load a tmuxp session. Map names containing spaces must be quoted.
+The new map name and root-node text are set to `Operations`. The root receives
+the generated `script1`. The starter branch contains `hello-win` tagged
+`WINDOW`, with the child command `echo hello world`. Map creation exits without
+exporting or loading the session.
 
 ## Usage
 
@@ -138,34 +152,25 @@ Use a local JSON export instead of gRPC:
 ```bash
 freeplane-tmux \
   --map-json examples/example-map.json \
-  --tmuxp-out /tmp/demo.tmuxp.yaml
+  --yaml-out /tmp/demo.tmuxp.yaml
 ```
 
-The original script-style entry point remains available from a source checkout:
-
-```bash
-python3 freeplane_tmux.py --load
-```
-
-## Compatible CLI flags
-
-The refactor preserves:
+Current CLI surface:
 
 ```text
+--create / --create-map
+--create-terminal
 --addr
---host
---port
 --timeout
 --output-dir
 --json-out
---tmuxp-out
 --yaml-out
 --load
 --detached
 --no-groovy-details
+--map-json
+--pretty
 ```
-
-Additional useful flags are `--create-map`, `--create-terminal`, `--map-json`, and `--grpc-stubs-dir`.
 
 ## Mindmap semantics
 
@@ -247,6 +252,9 @@ Use `--no-groovy-details` to rely only on the normal JSON export.
 
 ```text
 src/freeplane_tmux/
+├── cli.py          # public CLI and workflow orchestration
+├── grpc_client.py  # Freeplane RPC transport
+├── groovy.py       # root script1 and starter-map Groovy generation
 ├── models.py       # raw Freeplane model and normalized execution-plan types
 ├── text.py         # detailsText sanitation and command splitting
 ├── templates.py    # template rendering and unresolved-key validation
@@ -254,29 +262,30 @@ src/freeplane_tmux/
 ├── compiler.py     # semantic normalization into SessionSpec
 ├── shell.py        # shell synchronization and ssh/sudo bootstrap
 ├── emitter.py      # tmuxp dictionary and YAML output
-├── grpc_client.py  # Freeplane RPC and Groovy detailsText enrichment
-└── cli.py          # compatible command-line interface
+└── runtime.py      # tmuxp load and external-process environment boundary
 ```
 
-The gRPC layer only produces the raw model. The compiler does not know how the map was fetched, and the emitter only consumes the normalized execution plan.
+The CLI selects a workflow but does not implement Groovy generation or runtime
+loading. The gRPC client owns transport only. The compiler is independent of map
+acquisition, and the emitter consumes only the validated execution plan.
 
 ## Development
 
 ```bash
 python3 -m pip install -e '.[dev]'
-python3 -m compileall -q src tests freeplane_tmux.py
+python3 -m compileall -q src tests packaging
 python3 -m pytest -q
 ruff check .
 ```
 
-The tests cover relationship leaf and subtree expansion, window-root relationships, implicit and pane-list modes, path inheritance, `pre` chaining, environment and alias bootstrap across `ssh`/`sudo`, alias late resolution, unresolved alias failures, CLI compatibility, and HTML cleanup.
+The tests cover relationship leaf and subtree expansion, window-root relationships, implicit and pane-list modes, path inheritance, `pre` chaining, environment and alias bootstrap across `ssh`/`sudo`, alias late resolution, unresolved alias failures, the direct Groovy terminal path, runtime loading, and HTML cleanup.
 
 ## Known boundaries
 
 - A relationship is intentionally limited to one target. Multiple targets are rejected instead of being resolved by order-dependent behavior.
 - Context bootstrap targets interactive `ssh` calls without an existing remote command and `sudo` shell transitions. An `ssh host some-command` invocation is treated as a self-contained remote command and is left unchanged.
 - Alias transport uses Bash because POSIX shells do not provide a portable alias initialization mechanism.
-- The generated Freeplane protobuf modules remain owned by `freeplane_plugin_grpc` and are not vendored here.
+- The bundled protobuf modules cover only the RPCs used by this project.
 
 ## License
 

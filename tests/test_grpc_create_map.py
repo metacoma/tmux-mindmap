@@ -1,49 +1,11 @@
 from __future__ import annotations
 
-import json
 import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
 
-from freeplane_tmux.grpc_client import (
-    GrpcClientError,
-    _create_map_groovy,
-    _map_local_script,
-    create_live_map,
-)
-
-
-def test_map_local_script_contains_dynamic_binary_path() -> None:
-    script = _map_local_script(
-        "/opt/freeplane-tmux/bin/freeplane-tmux",
-        "gnome-terminal --",
-    )
-
-    assert "// @ExecutionModes({ON_SELECTED_NODE})" in script
-    assert "--launch-gui-terminal" in script
-    assert "binaryFile.absolutePath" in script
-    assert "/opt/freeplane-tmux/bin/freeplane-tmux" in script
-    assert 'def terminalCommand = "gnome-terminal --"' in script
-
-
-def test_create_map_groovy_quotes_untrusted_name_and_sets_script1() -> None:
-    name = 'ops "map"\nnewMap.name = "injected"'
-    script = _create_map_groovy(name, "/tmp/freeplane-tmux", "gnome-terminal --")
-
-    assert f"def mapName = {json.dumps(name, ensure_ascii=False)}" in script
-    assert script.count("newMap.name = mapName") == 1
-    assert 'newMap.name = "injected"' not in script
-    assert "newMap.root['script1'] = launcherScript" in script
-    assert 'def helloWindow = newMap.root.createChild("hello-win")' in script
-    assert 'def helloCommand = helloWindow.createChild("echo hello world")' in script
-    assert 'def helloWindowId = helloWindow.id' in script
-    assert 'def helloCommandId = helloCommand.id' in script
-    assert 'helloWindow.tags.add("WINDOW")' in script
-    assert "launcherScriptBase64 = " in script
-    assert "/tmp/freeplane-tmux" not in script
-    assert "gnome-terminal" not in script
-    assert "${shellScript.absolutePath}" not in script
+from freeplane_tmux.grpc_client import GrpcClientError, create_live_map
 
 
 def _install_fake_grpc(monkeypatch, *, response: object):
@@ -85,7 +47,7 @@ def _install_fake_grpc(monkeypatch, *, response: object):
     return calls
 
 
-def test_create_live_map_calls_groovy(monkeypatch) -> None:
+def test_create_live_map_calls_groovy_with_clean_root_script(monkeypatch) -> None:
     response = SimpleNamespace(
         success=True,
         result='{"name":"Operations","root_text":"Operations"}',
@@ -94,35 +56,36 @@ def test_create_live_map_calls_groovy(monkeypatch) -> None:
     calls = _install_fake_grpc(monkeypatch, response=response)
     monkeypatch.setattr(
         "freeplane_tmux.grpc_client._load_stubs",
-        lambda explicit=None: (calls["pb2"], calls["pb2_grpc"]),
+        lambda: (calls["pb2"], calls["pb2_grpc"]),
     )
 
     result = create_live_map(
         address="freeplane.example:50052",
         timeout=3.5,
-        grpc_stubs_dir=None,
         map_name="Operations",
-        launcher_binary_path="/tmp/freeplane-tmux",
         terminal_command="gnome-terminal --",
+        load_command=[
+            "/tmp/freeplane-tmux",
+            "--addr",
+            "freeplane.example:50052",
+            "--load",
+        ],
     )
 
+    source = calls["request"].groovy_code
     assert result == "Operations"
     assert calls["address"] == "freeplane.example:50052"
     assert calls["ready_timeout"] == 3.5
     assert calls["rpc_timeout"] == 3.5
-    assert "c.newMap()" in calls["request"].groovy_code
-    assert "newMap.root['script1'] = launcherScript" in calls["request"].groovy_code
-    assert 'def helloWindow = newMap.root.createChild("hello-win")' in calls["request"].groovy_code
-    assert (
-        'def helloCommand = helloWindow.createChild("echo hello world")'
-        in calls["request"].groovy_code
-    )
-    assert 'def helloWindowId = helloWindow.id' in calls["request"].groovy_code
-    assert 'def helloCommandId = helloCommand.id' in calls["request"].groovy_code
-    assert 'helloWindow.tags.add("WINDOW")' in calls["request"].groovy_code
-    assert "launcherScriptBase64" in calls["request"].groovy_code
-    assert "/tmp/freeplane-tmux" not in calls["request"].groovy_code
-    assert "gnome-terminal" not in calls["request"].groovy_code
+    assert "c.newMap()" in source
+    assert "newMap.root['script1'] = rootScript" in source
+    assert 'def helloWindow = newMap.root.createChild("hello-win")' in source
+    assert 'def helloCommand = helloWindow.createChild("echo hello world")' in source
+    assert 'helloWindow.tags.add("WINDOW")' in source
+    assert "terminalCommand" in source
+    assert "loadCommand" in source
+    assert "--launch-gui-terminal" not in source
+    assert "launcherScriptBase64" not in source
     assert calls["closed"] is True
 
 
@@ -131,16 +94,16 @@ def test_create_live_map_reports_groovy_failure(monkeypatch) -> None:
     calls = _install_fake_grpc(monkeypatch, response=response)
     monkeypatch.setattr(
         "freeplane_tmux.grpc_client._load_stubs",
-        lambda explicit=None: (calls["pb2"], calls["pb2_grpc"]),
+        lambda: (calls["pb2"], calls["pb2_grpc"]),
     )
 
     with pytest.raises(GrpcClientError, match="permission denied"):
         create_live_map(
             address="127.0.0.1:50051",
             timeout=1.0,
-            grpc_stubs_dir=None,
             map_name="Operations",
-            launcher_binary_path="/tmp/freeplane-tmux",
+            terminal_command=None,
+            load_command=["/tmp/freeplane-tmux", "--load"],
         )
 
 
@@ -149,20 +112,20 @@ def test_create_live_map_rejects_empty_name() -> None:
         create_live_map(
             address="127.0.0.1:50051",
             timeout=1.0,
-            grpc_stubs_dir=None,
             map_name="   ",
-            launcher_binary_path="/tmp/freeplane-tmux",
+            terminal_command=None,
+            load_command=["/tmp/freeplane-tmux", "--load"],
         )
 
 
-def test_create_live_map_rejects_empty_binary_path() -> None:
-    with pytest.raises(GrpcClientError, match="binary path must not be empty"):
+def test_create_live_map_rejects_empty_load_command() -> None:
+    with pytest.raises(GrpcClientError, match="load command must not be empty"):
         create_live_map(
             address="127.0.0.1:50051",
             timeout=1.0,
-            grpc_stubs_dir=None,
             map_name="Operations",
-            launcher_binary_path="   ",
+            terminal_command=None,
+            load_command=[],
         )
 
 
@@ -171,30 +134,16 @@ def test_create_live_map_rejects_invalid_terminal_command() -> None:
         create_live_map(
             address="127.0.0.1:50051",
             timeout=1.0,
-            grpc_stubs_dir=None,
             map_name="Operations",
-            launcher_binary_path="/tmp/freeplane-tmux",
             terminal_command='unclosed "quote',
+            load_command=["/tmp/freeplane-tmux", "--load"],
         )
 
 
 def test_load_stubs_returns_bundled_modules() -> None:
     from freeplane_tmux.grpc_client import _load_stubs
 
-    pb2, pb2_grpc = _load_stubs(None)
+    pb2, pb2_grpc = _load_stubs()
 
     assert pb2.GroovyRequest(groovy_code="x").groovy_code == "x"
     assert hasattr(pb2_grpc.FreeplaneStub, "__init__")
-
-
-
-def test_create_map_groovy_embeds_terminal_command_in_launcher_script() -> None:
-    import base64
-    import re
-
-    script = _create_map_groovy("ops", "/tmp/freeplane-tmux", "xterm -e")
-    match = re.search(r'launcherScriptBase64 = "([A-Za-z0-9+/=]+)"', script)
-    assert match, "launcherScriptBase64 assignment not found"
-    decoded = base64.b64decode(match.group(1)).decode("utf-8")
-    assert 'def terminalCommand = "xterm -e"' in decoded
-    assert 'def cmd = [binaryFile.absolutePath, "--launch-gui-terminal", "--load"]' in decoded

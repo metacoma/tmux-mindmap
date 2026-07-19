@@ -5,7 +5,7 @@
 3. Run:
 
 ```bash
-python -m compileall -q src tests freeplane_tmux.py
+python -m compileall -q src tests packaging
 python -m pytest -q
 ruff check .
 ```

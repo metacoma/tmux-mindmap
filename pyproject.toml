@@ -4,17 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "freeplane-tmux"
-version = "0.2.19"
+version = "0.3.0"
 description = "Compile Freeplane mindmaps into tmuxp sessions through freeplane_plugin_grpc"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {file = "LICENSE"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{name = "freeplane-tmux contributors"}]
 keywords = ["freeplane", "tmux", "tmuxp", "grpc", "mindmap"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
-  "License :: OSI Approved :: MIT License",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
@@ -37,6 +37,7 @@ dev = [
   "ruff>=0.6",
 ]
 build = [
+  "build>=1.2",
   "pyinstaller>=6.21,<7",
 ]
 
@@ -48,6 +49,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
+pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.ruff]

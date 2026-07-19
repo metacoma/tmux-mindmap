@@ -1,24 +1,25 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
 import pytest
 
 from freeplane_tmux.cli import build_parser
 
 
-def test_legacy_cli_arguments_are_accepted() -> None:
+def test_current_cli_arguments_are_accepted() -> None:
     args = build_parser().parse_args(
         [
             "--addr",
             "127.0.0.1:50051",
-            "--host",
-            "localhost",
-            "--port",
-            "50052",
             "--timeout",
             "3",
             "--output-dir",
             "out",
             "--json-out",
             "map.json",
-            "--tmuxp-out",
+            "--yaml-out",
             "session.yaml",
             "--load",
             "--detached",
@@ -30,54 +31,41 @@ def test_legacy_cli_arguments_are_accepted() -> None:
     assert args.detached is True
 
 
-def test_run_tmuxp_uses_bundled_cli(monkeypatch, tmp_path) -> None:
-    import sys
-    from types import ModuleType
-
-    from freeplane_tmux.cli import _run_tmuxp
-
-    calls: list[list[str]] = []
-    fake_cli_module = ModuleType("tmuxp.cli")
-    fake_cli_module.cli = lambda args: calls.append(args)  # type: ignore[attr-defined]
-
-    monkeypatch.setattr("freeplane_tmux.cli.shutil.which", lambda name: "/usr/bin/tmux")
-    monkeypatch.setitem(sys.modules, "tmuxp.cli", fake_cli_module)
-
-    config = tmp_path / "session.yaml"
-    _run_tmuxp(config, detached=True)
-
-    assert calls == [["load", "--detached", str(config)]]
+@pytest.mark.parametrize(
+    "legacy_args",
+    [
+        ["--host", "localhost"],
+        ["--port", "50052"],
+        ["--tmuxp-out", "session.yaml"],
+        ["--grpc-stubs-dir", "/tmp/stubs"],
+        ["--selected-node-id", "node"],
+        ["--launch-gui-terminal"],
+        ["--inside-terminal"],
+    ],
+)
+def test_transitional_cli_arguments_are_removed(legacy_args: list[str]) -> None:
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(legacy_args)
 
 
-def test_run_tmuxp_requires_tmux(monkeypatch, tmp_path) -> None:
-    from freeplane_tmux.cli import _run_tmuxp
-
-    monkeypatch.setattr("freeplane_tmux.cli.shutil.which", lambda name: None)
-
-    with pytest.raises(RuntimeError, match="tmux executable not found"):
-        _run_tmuxp(tmp_path / "session.yaml", detached=False)
-
-
-def test_create_mode_is_accepted() -> None:
-    args = build_parser().parse_args(
-        [
-            "--host",
-            "freeplane.example",
-            "--port",
-            "50052",
-            "--create-map",
-            "Operations",
-            "--create-terminal",
-            "gnome-terminal --",
-        ]
-    )
-    assert args.host == "freeplane.example"
-    assert args.port == 50052
-    assert args.create == "Operations"
-    assert args.create_terminal == "gnome-terminal --"
+def test_create_aliases_and_terminal_are_accepted() -> None:
+    for flag in ("--create", "--create-map"):
+        args = build_parser().parse_args(
+            [
+                "--addr",
+                "freeplane.example:50052",
+                flag,
+                "Operations",
+                "--create-terminal",
+                "gnome-terminal --",
+            ]
+        )
+        assert args.addr == "freeplane.example:50052"
+        assert args.create == "Operations"
+        assert args.create_terminal == "gnome-terminal --"
 
 
-def test_main_creates_map_and_exits(monkeypatch, capsys) -> None:
+def test_main_creates_map_with_final_load_command(monkeypatch, capsys) -> None:
     from freeplane_tmux.cli import main
 
     calls: list[dict[str, object]] = []
@@ -87,14 +75,17 @@ def test_main_creates_map_and_exits(monkeypatch, capsys) -> None:
         return "Operations"
 
     monkeypatch.setattr("freeplane_tmux.cli.create_live_map", fake_create_live_map)
-    monkeypatch.setattr("freeplane_tmux.cli._current_binary_path", lambda: "/tmp/freeplane-bin")
+    monkeypatch.setattr(
+        "freeplane_tmux.cli._current_program_command",
+        lambda: ["/tmp/freeplane-tmux"],
+    )
 
     result = main(
         [
-            "--host",
-            "freeplane.example",
-            "--port",
-            "50052",
+            "--addr",
+            "freeplane.example:50052",
+            "--timeout",
+            "3.5",
             "--create-map",
             "Operations",
             "--create-terminal",
@@ -106,11 +97,17 @@ def test_main_creates_map_and_exits(monkeypatch, capsys) -> None:
     assert calls == [
         {
             "address": "freeplane.example:50052",
-            "timeout": 10.0,
-            "grpc_stubs_dir": None,
+            "timeout": 3.5,
             "map_name": "Operations",
-            "launcher_binary_path": "/tmp/freeplane-bin",
             "terminal_command": "gnome-terminal --",
+            "load_command": [
+                "/tmp/freeplane-tmux",
+                "--addr",
+                "freeplane.example:50052",
+                "--timeout",
+                "3.5",
+                "--load",
+            ],
         }
     ]
     assert capsys.readouterr().out == "Operations\n"
@@ -139,14 +136,89 @@ def test_create_terminal_requires_create(capsys) -> None:
     assert "--create-terminal can only be used" in capsys.readouterr().err
 
 
-def test_current_binary_path_prefers_path_resolution(monkeypatch, tmp_path) -> None:
-    from freeplane_tmux.cli import _current_binary_path
+def test_detached_requires_load(capsys) -> None:
+    from freeplane_tmux.cli import main
+
+    result = main(["--detached", "--map-json", "missing.json"])
+
+    assert result == 4
+    assert "--detached can only be used with --load" in capsys.readouterr().err
+
+
+def test_current_program_command_prefers_executable_entrypoint(monkeypatch, tmp_path: Path) -> None:
+    from freeplane_tmux.cli import _current_program_command
 
     binary = tmp_path / "freeplane-tmux"
     binary.write_text("#!/bin/sh\n", encoding="utf-8")
     binary.chmod(0o755)
 
+    monkeypatch.delattr("freeplane_tmux.cli.sys.frozen", raising=False)
     monkeypatch.setattr("freeplane_tmux.cli.sys.argv", ["freeplane-tmux"])
     monkeypatch.setattr("freeplane_tmux.cli.shutil.which", lambda name: str(binary))
 
-    assert _current_binary_path() == str(binary.resolve())
+    assert _current_program_command() == [str(binary.resolve())]
+
+
+def test_current_program_command_falls_back_to_python_module(monkeypatch, tmp_path: Path) -> None:
+    from freeplane_tmux.cli import _current_program_command
+
+    non_executable = tmp_path / "runner.py"
+    non_executable.write_text("", encoding="utf-8")
+
+    monkeypatch.delattr("freeplane_tmux.cli.sys.frozen", raising=False)
+    monkeypatch.setattr("freeplane_tmux.cli.sys.argv", [str(non_executable)])
+    monkeypatch.setattr("freeplane_tmux.cli.shutil.which", lambda name: None)
+    monkeypatch.setattr("freeplane_tmux.cli.sys.executable", "/usr/bin/python3")
+
+    assert _current_program_command() == [
+        str(Path("/usr/bin/python3").resolve()),
+        "-m",
+        "freeplane_tmux",
+    ]
+
+
+def test_load_compiles_emits_and_runs_tmuxp(monkeypatch, tmp_path: Path, capsys) -> None:
+    from freeplane_tmux.cli import main
+
+    raw_map = {
+        "id": "root",
+        "text": "demo",
+        "children": [
+            {
+                "id": "window",
+                "text": "hello-win",
+                "tags": ["WINDOW"],
+                "children": [
+                    {
+                        "id": "command",
+                        "text": "echo hello world",
+                    }
+                ],
+            }
+        ],
+    }
+    map_path = tmp_path / "map.json"
+    map_path.write_text(json.dumps(raw_map), encoding="utf-8")
+    calls: list[tuple[Path, bool]] = []
+    monkeypatch.setattr(
+        "freeplane_tmux.runtime.run_tmuxp",
+        lambda path, *, detached: calls.append((path, detached)),
+    )
+
+    result = main(
+        [
+            "--map-json",
+            str(map_path),
+            "--output-dir",
+            str(tmp_path),
+            "--load",
+            "--detached",
+        ]
+    )
+
+    yaml_path = tmp_path / "demo.tmuxp.yaml"
+    assert result == 0
+    assert yaml_path.is_file()
+    assert "echo hello world" in yaml_path.read_text(encoding="utf-8")
+    assert calls == [(yaml_path, True)]
+    assert capsys.readouterr().out == f"{yaml_path}\n"
