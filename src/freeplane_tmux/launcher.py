@@ -5,6 +5,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 DEFAULT_TERMINAL_COMMAND = "x-terminal-emulator -e"
@@ -20,6 +21,15 @@ PAUSE_ON_ERROR = True
 def resolve_launch_log_path() -> Path:
     runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or os.environ.get("TMPDIR") or "/tmp"
     return Path(runtime_dir) / "freeplane-tmux-launcher.log"
+
+
+def append_launch_log(message: str) -> Path:
+    log_path = resolve_launch_log_path()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(f"[{timestamp}] {message}\n")
+    return log_path
 
 
 def _command_exists(command_name: str) -> bool:
@@ -57,6 +67,13 @@ def launch_gui_terminal(
     launch_log.parent.mkdir(parents=True, exist_ok=True)
 
     command = [*terminal_parts, binary_path, INSIDE_TERMINAL_FLAG, *inner_argv]
+    child_env = os.environ.copy()
+    removed_env = {name: child_env.pop(name) for name in ("TMUX", "TMUX_PANE") if name in child_env}
+    append_launch_log(
+        "launch_gui_terminal command="
+        f"{command!r} cwd={os.getcwd()!r} display={os.environ.get('DISPLAY')!r} "
+        f"wayland={os.environ.get('WAYLAND_DISPLAY')!r} removed_tmux={removed_env!r}"
+    )
     with launch_log.open("ab") as log_file:
         subprocess.Popen(
             command,
@@ -65,6 +82,7 @@ def launch_gui_terminal(
             stderr=subprocess.STDOUT,
             start_new_session=True,
             close_fds=True,
+            env=child_env,
         )
 
 

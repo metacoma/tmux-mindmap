@@ -1,0 +1,177 @@
+* Creating isolated environment: venv+pip...
+* Installing packages in isolated environment:
+  - setuptools>=68
+* Getting build dependencies for wheel...
+/tmp/build-env-orkvuiwj/lib/python3.13/site-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+!!
+
+        ********************************************************************************
+        Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+
+        By 2027-Feb-18, you need to update your project and remove deprecated calls
+        or your builds will no longer be supported.
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  corresp(dist, value, root_dir)
+/tmp/build-env-orkvuiwj/lib/python3.13/site-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: MIT License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  dist._finalize_license_expression()
+/tmp/build-env-orkvuiwj/lib/python3.13/site-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: MIT License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+running egg_info
+creating src/freeplane_tmux.egg-info
+writing src/freeplane_tmux.egg-info/PKG-INFO
+writing dependency_links to src/freeplane_tmux.egg-info/dependency_links.txt
+writing entry points to src/freeplane_tmux.egg-info/entry_points.txt
+writing requirements to src/freeplane_tmux.egg-info/requires.txt
+writing top-level names to src/freeplane_tmux.egg-info/top_level.txt
+writing manifest file 'src/freeplane_tmux.egg-info/SOURCES.txt'
+reading manifest file 'src/freeplane_tmux.egg-info/SOURCES.txt'
+adding license file 'LICENSE'
+writing manifest file 'src/freeplane_tmux.egg-info/SOURCES.txt'
+* Building wheel...
+/tmp/build-env-orkvuiwj/lib/python3.13/site-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+!!
+
+        ********************************************************************************
+        Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+
+        By 2027-Feb-18, you need to update your project and remove deprecated calls
+        or your builds will no longer be supported.
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  corresp(dist, value, root_dir)
+/tmp/build-env-orkvuiwj/lib/python3.13/site-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: MIT License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  dist._finalize_license_expression()
+/tmp/build-env-orkvuiwj/lib/python3.13/site-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+!!
+
+        ********************************************************************************
+        Please consider removing the following classifiers in favor of a SPDX license expression:
+
+        License :: OSI Approved :: MIT License
+
+        See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+        ********************************************************************************
+
+!!
+  self._finalize_license_expression()
+running bdist_wheel
+running build
+running build_py
+creating build/lib/freeplane_tmux
+copying src/freeplane_tmux/__init__.py -> build/lib/freeplane_tmux
+copying src/freeplane_tmux/__main__.py -> build/lib/freeplane_tmux
+copying src/freeplane_tmux/cli.py -> build/lib/freeplane_tmux
+copying src/freeplane_tmux/compiler.py -> build/lib/freeplane_tmux
+copying src/freeplane_tmux/emitter.py -> build/lib/freeplane_tmux
+copying src/freeplane_tmux/errors.py -> build/lib/freeplane_tmux
+copying src/freeplane_tmux/grpc_client.py -> build/lib/freeplane_tmux
+copying src/freeplane_tmux/models.py -> build/lib/freeplane_tmux
+copying src/freeplane_tmux/scope.py -> build/lib/freeplane_tmux
+copying src/freeplane_tmux/shell.py -> build/lib/freeplane_tmux
+copying src/freeplane_tmux/templates.py -> build/lib/freeplane_tmux
+copying src/freeplane_tmux/text.py -> build/lib/freeplane_tmux
+copying src/freeplane_tmux/launcher.py -> build/lib/freeplane_tmux
+creating build/lib/freeplane_tmux/vendor
+copying src/freeplane_tmux/vendor/__init__.py -> build/lib/freeplane_tmux/vendor
+copying src/freeplane_tmux/vendor/freeplane_pb2.py -> build/lib/freeplane_tmux/vendor
+copying src/freeplane_tmux/vendor/freeplane_pb2_grpc.py -> build/lib/freeplane_tmux/vendor
+running egg_info
+writing src/freeplane_tmux.egg-info/PKG-INFO
+writing dependency_links to src/freeplane_tmux.egg-info/dependency_links.txt
+writing entry points to src/freeplane_tmux.egg-info/entry_points.txt
+writing requirements to src/freeplane_tmux.egg-info/requires.txt
+writing top-level names to src/freeplane_tmux.egg-info/top_level.txt
+reading manifest file 'src/freeplane_tmux.egg-info/SOURCES.txt'
+adding license file 'LICENSE'
+writing manifest file 'src/freeplane_tmux.egg-info/SOURCES.txt'
+installing to build/bdist.linux-x86_64/wheel
+running install
+running install_lib
+creating build/bdist.linux-x86_64/wheel
+creating build/bdist.linux-x86_64/wheel/freeplane_tmux
+copying build/lib/freeplane_tmux/__init__.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+copying build/lib/freeplane_tmux/__main__.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+copying build/lib/freeplane_tmux/cli.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+copying build/lib/freeplane_tmux/compiler.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+copying build/lib/freeplane_tmux/emitter.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+copying build/lib/freeplane_tmux/errors.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+copying build/lib/freeplane_tmux/grpc_client.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+copying build/lib/freeplane_tmux/models.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+copying build/lib/freeplane_tmux/scope.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+copying build/lib/freeplane_tmux/shell.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+copying build/lib/freeplane_tmux/templates.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+copying build/lib/freeplane_tmux/text.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+copying build/lib/freeplane_tmux/launcher.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux
+creating build/bdist.linux-x86_64/wheel/freeplane_tmux/vendor
+copying build/lib/freeplane_tmux/vendor/__init__.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux/vendor
+copying build/lib/freeplane_tmux/vendor/freeplane_pb2.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux/vendor
+copying build/lib/freeplane_tmux/vendor/freeplane_pb2_grpc.py -> build/bdist.linux-x86_64/wheel/./freeplane_tmux/vendor
+running install_egg_info
+Copying src/freeplane_tmux.egg-info to build/bdist.linux-x86_64/wheel/./freeplane_tmux-0.2.16-py3.13.egg-info
+running install_scripts
+creating build/bdist.linux-x86_64/wheel/freeplane_tmux-0.2.16.dist-info/WHEEL
+creating '/tmp/tmuxfix/dist/.tmp-6xe2bid5/freeplane_tmux-0.2.16-py3-none-any.whl' and adding 'build/bdist.linux-x86_64/wheel' to it
+adding 'freeplane_tmux/__init__.py'
+adding 'freeplane_tmux/__main__.py'
+adding 'freeplane_tmux/cli.py'
+adding 'freeplane_tmux/compiler.py'
+adding 'freeplane_tmux/emitter.py'
+adding 'freeplane_tmux/errors.py'
+adding 'freeplane_tmux/grpc_client.py'
+adding 'freeplane_tmux/launcher.py'
+adding 'freeplane_tmux/models.py'
+adding 'freeplane_tmux/scope.py'
+adding 'freeplane_tmux/shell.py'
+adding 'freeplane_tmux/templates.py'
+adding 'freeplane_tmux/text.py'
+adding 'freeplane_tmux/vendor/__init__.py'
+adding 'freeplane_tmux/vendor/freeplane_pb2.py'
+adding 'freeplane_tmux/vendor/freeplane_pb2_grpc.py'
+adding 'freeplane_tmux-0.2.16.dist-info/licenses/LICENSE'
+adding 'freeplane_tmux-0.2.16.dist-info/METADATA'
+adding 'freeplane_tmux-0.2.16.dist-info/WHEEL'
+adding 'freeplane_tmux-0.2.16.dist-info/entry_points.txt'
+adding 'freeplane_tmux-0.2.16.dist-info/top_level.txt'
+adding 'freeplane_tmux-0.2.16.dist-info/RECORD'
+removing build/bdist.linux-x86_64/wheel
+Successfully built freeplane_tmux-0.2.16-py3-none-any.whl

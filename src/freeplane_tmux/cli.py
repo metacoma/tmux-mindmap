@@ -18,8 +18,10 @@ from .launcher import (
     LAUNCH_GUI_FLAG_LEGACY,
     TERMINAL_COMMAND_FLAG,
     TERMINAL_PART_FLAG,
+    append_launch_log,
     launch_gui_terminal,
     pause_for_terminal_exit,
+    resolve_launch_log_path,
 )
 from .models import RawNode, RawValidationError
 
@@ -220,13 +222,34 @@ def _system_loader_env():
             else:
                 os.environ[name] = value
 
+
+@contextmanager
+def _clean_tmux_env():
+    tracked = ["TMUX", "TMUX_PANE"]
+    original = {name: os.environ.get(name) for name in tracked}
+    removed = {name: value for name, value in original.items() if value is not None}
+    try:
+        for name in tracked:
+            os.environ.pop(name, None)
+        if removed:
+            append_launch_log(f"cleared tmux env for child process: {removed!r}")
+        yield
+    finally:
+        for name, value in original.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
 def _write_text(path: Path, value: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(value, encoding="utf-8")
 
 
 def _run_tmuxp(path: Path, *, detached: bool) -> None:
-    if shutil.which("tmux") is None:
+    tmux_path = shutil.which("tmux")
+    if tmux_path is None:
         raise RuntimeError("tmux executable not found in PATH")
 
     try:
@@ -239,13 +262,27 @@ def _run_tmuxp(path: Path, *, detached: bool) -> None:
         command.append("--detached")
     command.append(str(path))
 
+    tmux_env_state = {
+        "TMUX": os.environ.get("TMUX"),
+        "TMUX_PANE": os.environ.get("TMUX_PANE"),
+    }
+    append_launch_log(
+        f"tmuxp load starting tmux={tmux_path!r} yaml={str(path)!r} detached={detached} "
+        f"tmux_env={tmux_env_state!r}"
+    )
+
     try:
-        with _system_loader_env():
+        with _system_loader_env(), _clean_tmux_env():
             tmuxp_cli(command)
+        append_launch_log(f"tmuxp load completed yaml={str(path)!r}")
     except SystemExit as exc:
         exit_code = exc.code if isinstance(exc.code, int) else 1
+        append_launch_log(f"tmuxp load exited with code {exit_code} for yaml={str(path)!r}")
         if exit_code:
             raise RuntimeError(f"tmuxp load failed with exit code {exit_code}") from exc
+    except Exception as exc:
+        append_launch_log(f"tmuxp load raised {exc.__class__.__name__}: {exc}")
+        raise
 
 
 def _normalize_terminal_parts(parts: list[object]) -> list[str]:
@@ -308,9 +345,14 @@ def _rebuild_cli_args(args: argparse.Namespace) -> list[str]:
 def _run_main(args: argparse.Namespace) -> int:
     _validate_mode_combinations(args)
     if args.launch_gui_terminal:
+        terminal_command = _resolve_hidden_terminal_command(args)
+        append_launch_log(
+            f"launcher mode binary={_current_binary_path()!r} terminal={terminal_command!r} "
+            f"inner_argv={_rebuild_cli_args(args)!r}"
+        )
         launch_gui_terminal(
             binary_path=_current_binary_path(),
-            terminal_command=_resolve_hidden_terminal_command(args),
+            terminal_command=terminal_command,
             inner_argv=_rebuild_cli_args(args),
         )
         return 0
@@ -352,6 +394,12 @@ def _run_main(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     exit_code = 0
+    if args.launch_gui_terminal or args.inside_terminal:
+        append_launch_log(
+            f"main argv={(argv if argv is not None else sys.argv[1:])!r} cwd={os.getcwd()!r} "
+            f"inside_terminal={args.inside_terminal} launch_gui={args.launch_gui_terminal} "
+            f"log_file={str(resolve_launch_log_path())!r}"
+        )
     try:
         exit_code = _run_main(args)
         return exit_code
@@ -372,6 +420,11 @@ def main(argv: list[str] | None = None) -> int:
         exit_code = 5
         return exit_code
     finally:
+        if args.launch_gui_terminal or args.inside_terminal:
+            append_launch_log(
+                f"main exiting with code={exit_code} "
+                f"inside_terminal={args.inside_terminal}"
+            )
         if args.inside_terminal:
             pause_for_terminal_exit(exit_code)
 

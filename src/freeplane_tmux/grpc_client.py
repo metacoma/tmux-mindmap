@@ -98,6 +98,18 @@ def _map_local_script(
 
 def freeplaneTmuxBinary = {binary_json}
 def terminalCommand = {terminal_json}
+def runtimeDir = System.getenv("XDG_RUNTIME_DIR") ?: System.getenv("TMPDIR") ?: "/tmp"
+def launchLog = new File(runtimeDir, "freeplane-tmux-launcher.log")
+
+if (!launchLog.parentFile?.isDirectory()) {{
+    launchLog.parentFile?.mkdirs()
+}}
+
+launchLog << (
+    "[groovy] binary=" + freeplaneTmuxBinary +
+    " terminal=" + terminalCommand +
+    System.lineSeparator()
+)
 
 def binaryFile = new File(freeplaneTmuxBinary)
 if (!binaryFile.isFile()) {{
@@ -118,11 +130,13 @@ def cmd = [binaryFile.absolutePath, "--launch-gui-terminal", "--load"]
 if (terminalCommand != null && terminalCommand.toString() != "") {{
     cmd.add("--terminal=" + terminalCommand.toString())
 }}
+launchLog << "[groovy] cmd=" + cmd + System.lineSeparator()
 def pb = new ProcessBuilder(cmd.collect {{ it.toString() }})
 pb.redirectErrorStream(true)
+pb.redirectOutput(ProcessBuilder.Redirect.appendTo(launchLog))
 pb.start()
 
-c.statusInfo = "Started tmux launcher"
+c.statusInfo = "Started tmux launcher; log: ${{launchLog.absolutePath}}"
 """.strip()
 
 
