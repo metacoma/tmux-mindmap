@@ -233,12 +233,14 @@ Templates use `{{ name }}` syntax. Resolution happens at each executable call si
 
 Built-in variables are available in commands, `pre`, aliases, and relationship targets:
 
-- `{{ session-name }}` — root/session name;
-- `{{ window-name }}` — current `WINDOW` node name;
-- `{{ pane-name }}` — current named pane root, or an empty string for an unnamed/implicit pane;
-- `{{ node-name }}` — current command call-site node name.
+- `{{ session-name }}` — rendered root/session name;
+- `{{ window-name }}` — rendered current `WINDOW` node name;
+- `{{ pane-name }}` — rendered current named pane root, or an empty string for an unnamed/implicit pane;
+- `{{ node-name }}` — rendered current command call-site node name.
 
-An unresolved command, `pre`, or alias at an executable call site is a semantic error. It is never silently emitted with broken placeholders.
+Jinja expansion also applies to Freeplane node names before tmuxp emission. Session names may use root attributes, window names may additionally use `session-name`, pane names may use `session-name` and `window-name`, and executable node names may use all current builtins. For example, a pane node named `{{ window-name }}` inside window `mcmp2` is emitted with pane title `mcmp2`.
+
+An unresolved command, node name, `pre`, or alias at an executable call site is a semantic error. It is never silently emitted with broken placeholders.
 
 ### ALIAS nodes
 
@@ -285,9 +287,27 @@ python3 -m pip install -e '.[dev]'
 python3 -m compileall -q src tests packaging
 python3 -m pytest -q
 ruff check .
+ruff format --check .
 ```
 
-The tests cover ordered multi-relationship expansion, own-command/relationship/child ordering, relationship leaf and subtree expansion, window-root relationships, OSC pane titles without tmux-version-specific options, implicit and pane-list modes, path inheritance, `pre` chaining, environment and alias bootstrap across `ssh`/`sudo`, alias late resolution, unresolved alias failures, the direct Groovy terminal path, runtime loading, and HTML cleanup.
+Canonical maps recovered from the project history live in `examples/history/` as paired files:
+
+```text
+<name>.map.json
+<name>.tmuxp.yaml
+```
+
+`tests/test_history_fixtures.py` recompiles every map and compares the complete tmuxp structure and command lists with the committed YAML. `tests/test_tmuxp_integration.py` then invokes real `tmuxp load -d` and inspects tmux to verify window names, pane counts, and rendered pane titles. The live test preserves only the generated OSC title command and replaces executable payloads with `sleep`, so historical SSH, sudo, ping, editor, and monitoring commands are never run by CI.
+
+Run only the real integration suite with:
+
+```bash
+REQUIRE_TMUXP_INTEGRATION=1 python3 -m pytest -q -m tmuxp_integration
+```
+
+The integration suite requires `tmux` and `tmuxp`. GitHub Actions installs tmux and runs this suite in a dedicated Python 3.12 job.
+
+The tests cover historical map-to-tmuxp compatibility, real tmuxp topology loading, ordered multi-relationship expansion, own-command/relationship/child ordering, relationship leaf and subtree expansion, window-root relationships, OSC pane titles without tmux-version-specific options, implicit and pane-list modes, path inheritance, `pre` chaining, environment and alias bootstrap across `ssh`/`sudo`, alias late resolution, unresolved alias failures, the direct Groovy terminal path, runtime loading, and HTML cleanup.
 
 ## Known boundaries
 

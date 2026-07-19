@@ -55,7 +55,7 @@ def run_tmuxp(path: Path, *, detached: bool) -> None:
 
     command = ["load"]
     if detached:
-        command.append("--detached")
+        command.append("-d")
     command.append(str(path))
 
     try:

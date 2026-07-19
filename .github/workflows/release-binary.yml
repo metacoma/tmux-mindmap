@@ -17,6 +17,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
@@ -24,8 +26,9 @@ jobs:
       - name: Run checks
         run: |
           python -m compileall -q src tests packaging
-          python -m pytest -q
+          REQUIRE_TMUXP_INTEGRATION=1 python -m pytest -q
           ruff check .
+          ruff format --check .
       - name: Build wheel
         run: python -m build --wheel
       - name: Build standalone executable

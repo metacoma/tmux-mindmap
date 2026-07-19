@@ -1,0 +1,38 @@
+session_name: demo
+windows:
+- window_name: editor
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export PROJECT_DIR=/tmp/demo
+    - shopt -s expand_aliases
+    - alias cproj='cd /tmp/demo'
+    - cd /tmp/demo
+    - nvim
+    environment:
+      PROJECT_DIR: /tmp/demo
+- window_name: ops
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export PROJECT_DIR=/tmp/demo
+    - shopt -s expand_aliases
+    - alias cproj='cd /tmp/demo'
+    - printf '\033]2;%s\033\\' shell
+    - cd /tmp/demo
+    - bash
+    environment:
+      PROJECT_DIR: /tmp/demo
+  - shell_command:
+    - export PROJECT_DIR=/tmp/demo
+    - shopt -s expand_aliases
+    - alias cproj='cd /tmp/demo'
+    - printf '\033]2;%s\033\\' logs
+    - cd /tmp/demo
+    - journalctl -f
+    environment:
+      PROJECT_DIR: /tmp/demo

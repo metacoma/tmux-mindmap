@@ -1,0 +1,9 @@
+session_name: tmux
+windows:
+- window_name: hello-win
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - echo hello world

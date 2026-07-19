@@ -2,6 +2,7 @@ name: CI
 on:
   push:
   pull_request:
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -16,5 +17,21 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e '.[dev]'
       - run: python -m compileall -q src tests packaging
-      - run: python -m pytest -q
+      - run: python -m pytest -q -m 'not tmuxp_integration'
       - run: ruff check .
+      - run: ruff format --check .
+
+  tmuxp-integration:
+    runs-on: ubuntu-latest
+    env:
+      REQUIRE_TMUXP_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m pytest -q -m tmuxp_integration

@@ -139,7 +139,9 @@ class ScopeResolver:
             aliases=aliases_out,
         )
 
-    def render_command(self, template: str, scope: ScopeSnapshot, *, subject: str) -> list[str]:
+    def render_value(self, template: str, scope: ScopeSnapshot, *, subject: str) -> str:
         rendered = render_template(template, scope.lookup)
-        require_resolved(rendered, subject=subject)
-        return split_shell_commands(rendered)
+        return require_resolved(rendered, subject=subject)
+
+    def render_command(self, template: str, scope: ScopeSnapshot, *, subject: str) -> list[str]:
+        return split_shell_commands(self.render_value(template, scope, subject=subject))

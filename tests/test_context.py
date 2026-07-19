@@ -232,3 +232,70 @@ def test_pane_name_builtin_is_empty_for_unnamed_implicit_pane() -> None:
     assert pane.title is None
     assert pane.base_scope.vars["pane-name"] == ""
     assert [step.command for step in pane.steps] == ["printf '<%s>\\n' ''"]
+
+
+def test_jinja_expands_session_window_pane_and_node_names() -> None:
+    raw = node(
+        "root",
+        "session-{{ suffix }}",
+        attributes={"suffix": "lab", "host": "mcmp2"},
+        children=[
+            node(
+                "window",
+                "{{ host }}",
+                tags=["WINDOW"],
+                attributes={"window-mode": "pane-list"},
+                children=[
+                    node(
+                        "pane",
+                        "{{ window-name }}",
+                        children=[
+                            node("ssh", "ssh {{ pane-name }}"),
+                            node(
+                                "health",
+                                "health {{ window-name }}",
+                                detail="echo {{ node-name }}",
+                            ),
+                        ],
+                    )
+                ],
+            )
+        ],
+    )
+
+    session = compile_map(raw)
+    window = session.windows[0]
+    pane = window.panes[0]
+
+    assert session.session_name == "session-lab"
+    assert window.name == "mcmp2"
+    assert pane.title == "mcmp2"
+    assert pane.base_scope.vars["pane-name"] == "mcmp2"
+    assert pane_shell_commands(pane)[0] == "printf '\\033]2;%s\\033\\\\' mcmp2"
+    assert [step.display_name for step in pane.steps] == ["ssh mcmp2", "health mcmp2"]
+    assert [step.command for step in pane.steps] == ["ssh mcmp2", "echo health mcmp2"]
+
+
+def test_unresolved_template_in_pane_name_is_rejected() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                attributes={"window-mode": "pane-list"},
+                children=[
+                    node(
+                        "pane",
+                        "{{ missing-pane-name }}",
+                        children=[node("command", "uptime")],
+                    )
+                ],
+            )
+        ],
+    )
+
+    with pytest.raises(SemanticError, match="pane name.*missing-pane-name"):
+        compile_map(raw)

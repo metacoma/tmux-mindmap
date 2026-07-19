@@ -1,0 +1,55 @@
+{
+  "id": "root",
+  "text": "demo",
+  "attributes": {
+    "PROJECT_DIR": "/tmp/demo",
+    "pre": "cd {{PROJECT_DIR}}"
+  },
+  "children": [
+    {
+      "id": "alias",
+      "text": "cproj",
+      "tags": [
+        "ALIAS"
+      ],
+      "detail": "cd {{PROJECT_DIR}}"
+    },
+    {
+      "id": "window-editor",
+      "text": "editor",
+      "tags": [
+        "WINDOW"
+      ],
+      "children": [
+        {
+          "id": "editor-command",
+          "text": "nvim"
+        }
+      ]
+    },
+    {
+      "id": "window-ops",
+      "text": "ops",
+      "tags": [
+        "WINDOW"
+      ],
+      "children": [
+        {
+          "id": "pane-shell",
+          "text": "shell",
+          "children": [
+            {
+              "id": "shell-command",
+              "text": "bash"
+            }
+          ]
+        },
+        {
+          "id": "pane-logs",
+          "text": "logs",
+          "detail": "journalctl -f"
+        }
+      ]
+    }
+  ]
+}

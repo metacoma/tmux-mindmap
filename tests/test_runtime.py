@@ -30,7 +30,7 @@ def test_run_tmuxp_uses_bundled_cli(monkeypatch, tmp_path: Path) -> None:
     config = tmp_path / "session.yaml"
     run_tmuxp(config, detached=True)
 
-    assert calls == [(["load", "--detached", str(config)], None, None)]
+    assert calls == [(["load", "-d", str(config)], None, None)]
     assert os.environ["TMUX"] == "outer"
     assert os.environ["TMUX_PANE"] == "%1"
 
@@ -48,3 +48,17 @@ def test_run_tmuxp_converts_nonzero_system_exit(monkeypatch, tmp_path: Path) -> 
 
     with pytest.raises(RuntimeError, match="exit code 7"):
         run_tmuxp(tmp_path / "session.yaml", detached=False)
+
+
+def test_detached_arguments_match_tmuxp_load_parser(tmp_path: Path) -> None:
+    import argparse
+
+    from tmuxp.cli.load import create_load_subparser
+
+    parser = create_load_subparser(argparse.ArgumentParser())
+    config = tmp_path / "session.yaml"
+
+    args = parser.parse_args(["-d", str(config)])
+
+    assert args.detached is True
+    assert args.workspace_files == [str(config)]

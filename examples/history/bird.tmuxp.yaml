@@ -1,0 +1,55 @@
+session_name: tmux
+windows:
+- window_name: bird
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - shopt -s expand_aliases
+    - alias stop='systemctl stop bird'
+    - alias start='systemctl start bird'
+    - alias status='systemctl status bird'
+    - printf '\033]2;%s\033\\' config
+    - 'sudo env bash -lc ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      shopt -s expand_aliases
+
+      alias stop=''"''"''systemctl stop bird''"''"''
+
+      alias start=''"''"''systemctl start bird''"''"''
+
+      alias status=''"''"''systemctl status bird''"''"''
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - nvim /etc/bird/bird.conf
+  - shell_command:
+    - shopt -s expand_aliases
+    - alias stop='systemctl stop bird'
+    - alias start='systemctl start bird'
+    - alias status='systemctl status bird'
+    - printf '\033]2;%s\033\\' ops
+    - 'sudo env bash -lc ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      shopt -s expand_aliases
+
+      alias stop=''"''"''systemctl stop bird''"''"''
+
+      alias start=''"''"''systemctl start bird''"''"''
+
+      alias status=''"''"''systemctl status bird''"''"''
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - ip ro | wc -l

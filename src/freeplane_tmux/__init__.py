@@ -1,5 +1,5 @@
 """Compile Freeplane mindmaps into tmuxp sessions."""
 
-__version__ = "0.3.1"
+__version__ = "0.3.3"
 
 __all__ = ["__version__"]

@@ -9,3 +9,7 @@ dist/
 *.map.json
 *.tmuxp.yaml
 *.log
+
+# Canonical history fixtures are intentionally versioned.
+!examples/history/*.map.json
+!examples/history/*.tmuxp.yaml

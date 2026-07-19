@@ -37,7 +37,14 @@ class MindmapCompiler:
         self._validate_relationship_targets()
 
     def compile(self) -> SessionSpec:
-        session_name = self.root.text.strip() or "freeplane"
+        root_layers = (self._node_layer(self.root),)
+        session_name = self._render_node_text(
+            self.root.text,
+            root_layers,
+            builtins={},
+            subject=f"session name from node {self.root.id!r}",
+            default="freeplane",
+        )
         windows = tuple(
             self._compile_window(location, session_name) for location in self._collect_windows()
         )
@@ -95,6 +102,26 @@ class MindmapCompiler:
         attributes = split_attributes(node.attributes)
         aliases = self._aliases_declared_by(node)
         return combine_layer(attributes, aliases=aliases)
+
+    def _render_node_text(
+        self,
+        template: str,
+        layers: tuple[ScopeLayer, ...],
+        *,
+        builtins: dict[str, str],
+        subject: str,
+        default: str = "",
+    ) -> str:
+        if not template.strip():
+            return default
+        scope = self._resolver.resolve(
+            layers,
+            builtins=builtins,
+            strict=False,
+            subject=subject,
+        )
+        rendered = self._resolver.render_value(template, scope, subject=subject).strip()
+        return rendered or default
 
     def _aliases_declared_by(self, node: RawNode) -> dict[str, AliasTemplate]:
         aliases: dict[str, AliasTemplate] = {}
@@ -227,25 +254,40 @@ class MindmapCompiler:
         window = location.node
         ancestor_nodes = location.path[:-1]
         ancestor_layers = tuple(self._node_layer(node) for node in ancestor_nodes)
+        window_layers = (*ancestor_layers, self._node_layer(window))
+        window_name = self._render_node_text(
+            window.text,
+            window_layers,
+            builtins={"session-name": session_name},
+            subject=f"window name from node {window.id!r}",
+            default="window",
+        )
         mode = self._window_mode(window)
 
         if mode == "single_implicit_pane":
-            panes = (self._compile_implicit_pane(window, ancestor_layers, session_name),)
+            panes = (
+                self._compile_implicit_pane(
+                    window,
+                    ancestor_layers,
+                    session_name,
+                    window_name,
+                ),
+            )
         else:
-            window_layers = (*ancestor_layers, self._node_layer(window))
             panes = tuple(
                 self._compile_pane_root(
                     window,
                     pane_root,
                     window_layers,
                     session_name,
+                    window_name,
                 )
                 for pane_root in self._non_alias_children(window)
             )
 
         return WindowSpec(
             window_id=window.id,
-            name=window.text.strip() or "window",
+            name=window_name,
             mode=mode,
             panes=panes,
         )
@@ -294,6 +336,7 @@ class MindmapCompiler:
         window: RawNode,
         ancestor_layers: tuple[ScopeLayer, ...],
         session_name: str,
+        window_name: str,
     ) -> PaneSpec:
         effective_layers = self._layers_for_node(
             ancestor_layers,
@@ -304,9 +347,9 @@ class MindmapCompiler:
             effective_layers,
             builtins=self._builtins(
                 session_name=session_name,
-                window_name=window.text,
+                window_name=window_name,
                 pane_name=None,
-                node_name=window.text if (window.detail or window.relationships) else "",
+                node_name=window_name if (window.detail or window.relationships) else "",
             ),
             strict=False,
             subject=f"implicit pane for window {window.text!r}",
@@ -317,7 +360,7 @@ class MindmapCompiler:
                 window,
                 inherited_layers=ancestor_layers,
                 session_name=session_name,
-                window_name=window.text,
+                window_name=window_name,
                 pane_name=None,
                 relationship_stack=(),
                 allow_text_payload=False,
@@ -331,7 +374,7 @@ class MindmapCompiler:
                         child,
                         inherited_layers=window_layers,
                         session_name=session_name,
-                        window_name=window.text,
+                        window_name=window_name,
                         pane_name=None,
                         relationship_stack=(),
                     )
@@ -351,24 +394,39 @@ class MindmapCompiler:
         pane_root: RawNode,
         window_layers: tuple[ScopeLayer, ...],
         session_name: str,
+        window_name: str,
     ) -> PaneSpec:
         children = self._non_alias_children(pane_root)
         structural_root = bool(children and not pane_root.detail and not pane_root.relationships)
         has_named_pane = bool(children or pane_root.detail or pane_root.relationships)
-        title = (pane_root.text.strip() or None) if has_named_pane else None
 
         base_layers = self._layers_for_node(
             window_layers,
             pane_root,
             include_local_layer=True,
         )
+        title = None
+        if has_named_pane:
+            title = (
+                self._render_node_text(
+                    pane_root.text,
+                    base_layers,
+                    builtins={
+                        "session-name": session_name,
+                        "window-name": window_name,
+                    },
+                    subject=f"pane name from node {pane_root.id!r}",
+                )
+                or None
+            )
+
         base_scope = self._resolver.resolve(
             base_layers,
             builtins=self._builtins(
                 session_name=session_name,
-                window_name=window.text,
+                window_name=window_name,
                 pane_name=title,
-                node_name=pane_root.text,
+                node_name=title or pane_root.text,
             ),
             strict=False,
             subject=f"pane {pane_root.text!r}",
@@ -383,7 +441,7 @@ class MindmapCompiler:
                         child,
                         inherited_layers=inherited,
                         session_name=session_name,
-                        window_name=window.text,
+                        window_name=window_name,
                         pane_name=title,
                         relationship_stack=(),
                     )
@@ -393,7 +451,7 @@ class MindmapCompiler:
                 pane_root,
                 inherited_layers=window_layers,
                 session_name=session_name,
-                window_name=window.text,
+                window_name=window_name,
                 pane_name=title,
                 relationship_stack=(),
                 allow_text_payload=False,
@@ -461,7 +519,17 @@ class MindmapCompiler:
             node,
             include_local_layer=include_local_layer,
         )
-        node_name = node_name_override if node_name_override is not None else node.text
+        node_name_template = node_name_override if node_name_override is not None else node.text
+        node_name = self._render_node_text(
+            node_name_template,
+            local_layers,
+            builtins={
+                "session-name": session_name,
+                "window-name": window_name,
+                "pane-name": pane_name or "",
+            },
+            subject=f"node name from node {node.id!r}",
+        )
         children = self._non_alias_children(node)
         uses_text_payload = bool(
             allow_text_payload
@@ -548,7 +616,7 @@ class MindmapCompiler:
         return [
             CommandStep(
                 node_id=node.id,
-                display_name=node.text,
+                display_name=scope.vars.get("node-name", node.text),
                 payload_source=payload_source,
                 command=command,
                 effective_scope=scope,

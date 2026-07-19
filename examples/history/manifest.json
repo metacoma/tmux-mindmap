@@ -1,0 +1,49 @@
+{
+  "cases": [
+    {
+      "name": "starter",
+      "map": "starter.map.json",
+      "tmuxp": "starter.tmuxp.yaml"
+    },
+    {
+      "name": "bird",
+      "map": "bird.map.json",
+      "tmuxp": "bird.tmuxp.yaml"
+    },
+    {
+      "name": "relationship-v1",
+      "map": "relationship-v1.map.json",
+      "tmuxp": "relationship-v1.tmuxp.yaml"
+    },
+    {
+      "name": "multi-relationship",
+      "map": "multi-relationship.map.json",
+      "tmuxp": "multi-relationship.tmuxp.yaml"
+    },
+    {
+      "name": "complex-three-panes",
+      "map": "complex-three-panes.map.json",
+      "tmuxp": "complex-three-panes.tmuxp.yaml"
+    },
+    {
+      "name": "scoped-helpers",
+      "map": "scoped-helpers.map.json",
+      "tmuxp": "scoped-helpers.tmuxp.yaml"
+    },
+    {
+      "name": "historical-comprehensive",
+      "map": "historical-comprehensive.map.json",
+      "tmuxp": "historical-comprehensive.tmuxp.yaml"
+    },
+    {
+      "name": "project-example",
+      "map": "project-example.map.json",
+      "tmuxp": "project-example.tmuxp.yaml"
+    },
+    {
+      "name": "jinja-node-names",
+      "map": "jinja-node-names.map.json",
+      "tmuxp": "jinja-node-names.tmuxp.yaml"
+    }
+  ]
+}

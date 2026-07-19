@@ -1,0 +1,71 @@
+{
+  "text": "tmux",
+  "id": "ID_ROOT",
+  "children": [
+    {
+      "text": "bird",
+      "id": "ID_BIRD",
+      "children": [
+        {
+          "text": "config",
+          "id": "ID_CONFIG",
+          "children": [
+            {
+              "text": "sudo bash",
+              "id": "ID_CONFIG_SUDO"
+            },
+            {
+              "text": "nvim /etc/bird/bird.conf",
+              "id": "ID_CONFIG_EDIT"
+            }
+          ]
+        },
+        {
+          "text": "ops",
+          "id": "ID_OPS",
+          "children": [
+            {
+              "text": "sudo bash",
+              "id": "ID_OPS_SUDO"
+            },
+            {
+              "text": "show route count",
+              "id": "ID_ROUTE_COUNT",
+              "detail": "ip ro | wc -l"
+            }
+          ]
+        }
+      ],
+      "tags": [
+        "WINDOW"
+      ],
+      "attributes": {
+        "service": "bird"
+      }
+    },
+    {
+      "text": "stop",
+      "id": "ID_STOP",
+      "detail": "systemctl stop {{ service }}",
+      "tags": [
+        "ALIAS"
+      ]
+    },
+    {
+      "text": "start",
+      "id": "ID_START",
+      "detail": "systemctl start {{ service }}",
+      "tags": [
+        "ALIAS"
+      ]
+    },
+    {
+      "text": "status",
+      "id": "ID_STATUS",
+      "detail": "systemctl status {{ service }}",
+      "tags": [
+        "ALIAS"
+      ]
+    }
+  ]
+}

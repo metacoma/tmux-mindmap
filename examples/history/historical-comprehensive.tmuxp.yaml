@@ -1,0 +1,705 @@
+session_name: tmux sesion-name
+windows:
+- window_name: example1
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' bar
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - echo hello
+    - echo world
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+- window_name: example2
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' foo
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - echo hello
+    - echo world
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+- window_name: example3
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' abc
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - echo hello
+    - echo world
+    - echo xxx
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+- window_name: example4
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' xxx
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - echo hello
+    - echo world
+    - echo xxx
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' bebebe
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - echo hello
+    - echo world
+    - echo xxx
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+- window_name: DEEP COMMANDS
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' 'ssh mcmp7'
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - echo hello
+    - echo world
+    - echo aaa
+    - echo bebebe
+    - echo xxx
+    - echo hello
+    - echo world
+    - deeep
+    - very deep
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' 'ssh mcmp8'
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - echo hello
+    - echo world
+    - echo xxx
+    - very
+    - very
+    - very
+    - very
+    - very
+    - deep
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+- window_name: with description
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' google
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - ping -c1 1.1.1.1
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' yandex
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - ping -c 8.8.8.8
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+- window_name: with description multiple command
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' host1
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - 'ssh -tt host1 ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - 'ssh -tt -A seed.mgmt.bebebe ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - id
+    - pwd
+    - exit
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - ps auxw
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' host2
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - ping host2
+    - who
+    - htop
+    - echo bebebe
+    - ps auxw
+    - id
+    - echo hha
+    - hahah
+    - hahha
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+- window_name: дескрипшены в командах
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' anyhost1
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - 'ssh -tt anyhost1 ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - df -h
+    - pwd
+    - who
+    - ps auxw
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' host2
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - 'ssh -tt anyhost2 ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - who
+    - top
+    - echo hello world
+    - ps auxw
+    - id
+    - export ENV_TEST2=aaaa
+    - date
+    - ps auxw | wc -l
+    - exit
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+- window_name: с ссылками на функции
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' anyhost1
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - 'ssh -tt anyhost1 ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - проверить место
+    - df -h
+    - pwd
+    - who
+    - ps auxw
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' host2
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - 'ssh -tt anyhost2 ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - who
+    - top
+    - echo hello world
+    - ps auxw
+    - export ENV_NEW=bebebebe
+    - id
+    - unset ENV_NEW
+    - сколько времени?
+    - date
+    - ps auxw | wc -l
+    - exit
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+- window_name: pane ссылаются на функцию
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' remote_host1
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - export ENV_TEST=xxx
+    - 'ssh -tt remote_host1 ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=xxx
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - export ENV_TEST=abc
+    - проверить место
+    - df -h
+    - pwd
+    - who
+    - export ENV_TEST=bebebe
+    - ps auxw
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' remote_host2
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - 'ssh -tt pane_host ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - export ENV_TEST=xxx
+    - 'ssh -tt remote_host2 ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=xxx
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - export ENV_TEST=abc
+    - who
+    - id
+    - сколько времени?
+    - date
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+- window_name: very simple windows
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - echo 1
+    - echo 2
+    - echo 3
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+- window_name: посложнее
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - printf '\033]2;%s\033\\' remote
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    - ssh remote host
+    - echo 1
+    - echo 2
+    - echo 3
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca
+  - shell_command:
+    - export ENV_TEST=abc
+    - export ENV_TEST2=bca
+    - 'ssh -tt -A seed.mgmt.mansion.shitcluster.io ''tmp=$(mktemp)
+
+      trap ''"''"''rm -f "$tmp"''"''"'' EXIT
+
+      cat >"$tmp" <<''"''"''FREEPLANE_TMUX_RC''"''"''
+
+      export ENV_TEST=abc
+
+      export ENV_TEST2=bca
+
+      FREEPLANE_TMUX_RC
+
+      bash --noprofile --rcfile "$tmp" -i'''
+    environment:
+      ENV_TEST: abc
+      ENV_TEST2: bca

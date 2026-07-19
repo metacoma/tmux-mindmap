@@ -1,0 +1,47 @@
+{
+  "text": "tmux",
+  "id": "ID_COMPLEX_ROOT",
+  "children": [
+    {
+      "text": "посложнее",
+      "id": "ID_COMPLEX_WINDOW",
+      "children": [
+        {
+          "text": "echo 1",
+          "id": "ID_COMPLEX_ONE"
+        },
+        {
+          "text": "remote",
+          "id": "ID_COMPLEX_REMOTE",
+          "children": [
+            {
+              "text": "ssh remote host",
+              "id": "ID_COMPLEX_SSH",
+              "children": [
+                {
+                  "text": "echo 1",
+                  "id": "ID_COMPLEX_R1"
+                },
+                {
+                  "text": "echo 2",
+                  "id": "ID_COMPLEX_R2"
+                },
+                {
+                  "text": "echo 3",
+                  "id": "ID_COMPLEX_R3"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "text": "echo 3",
+          "id": "ID_COMPLEX_THREE"
+        }
+      ],
+      "tags": [
+        "WINDOW"
+      ]
+    }
+  ]
+}

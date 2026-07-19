@@ -1,0 +1,19 @@
+{
+  "text": "tmux",
+  "id": "ID_ROOT",
+  "children": [
+    {
+      "text": "hello-win",
+      "id": "ID_WINDOW",
+      "children": [
+        {
+          "text": "echo hello world",
+          "id": "ID_COMMAND"
+        }
+      ],
+      "tags": [
+        "WINDOW"
+      ]
+    }
+  ]
+}
