@@ -9,9 +9,8 @@ The project treats the mindmap as a small declarative execution language: `WINDO
 - Uses the **map root** as the tmux session root.
 - Supports explicit `single implicit pane`, `pane list`, and ordered mixed-window plans.
 - Supports relationship calls to both leaf commands and composite function subtrees.
-- Supports WINDOW-to-WINDOW inheritance with ordered last-wins pane replacement.
-- Resolves helper relationship targets in the call-site context and inherited panes in the derived-window context.
-- Provides path-scoped template variables, `window.*` / `pane.*` object fields, and environment inheritance.
+- Resolves relationship targets in the call-site context.
+- Provides path-scoped template variables and environment inheritance.
 - Accumulates `pre` commands instead of overwriting them.
 - Supports scoped `ALIAS` declarations with late template resolution.
 - Rebuilds environment and aliases when an interactive command changes shell context through `ssh` or `sudo`.
@@ -231,9 +230,9 @@ Each target may be:
 - a leaf function containing one command, or
 - a composite function root whose subtree contains multiple commands.
 
-Helper relationship calls are supported from command nodes and pane roots. Their targets are expanded in the call-site context, so `window.name`, `pane.name`, `node-name`, variables, environment, and accumulated `pre` state come from the invocation path rather than the target's storage location. Target-root attributes act as defaults; call-site attributes override them.
+Relationship calls are supported from command nodes, pane roots, and window roots. A window with relationships and no pane children becomes one implicit pane.
 
-A relationship declared directly on a `WINDOW` node is different: it is treated as window inheritance rather than a helper call. The current window inherits target windows in relationship order, merges window attributes with later values winning, and re-renders inherited panes in the derived-window context. Explicit panes are de-duplicated by their final rendered pane title (`base1 < base2 < derived`); unnamed implicit command panes are appended in order. WINDOW relationships may only target other `WINDOW` nodes.
+The target root is expanded with call-site builtins and overrides. In particular, `window-name`, `pane-name`, `node-name`, variables, environment, and accumulated `pre` state come from the invocation path rather than the target's storage location. Target-root attributes act as defaults; call-site attributes override them.
 
 ### Attributes and late resolution
 
@@ -249,17 +248,11 @@ Templates use `{{ name }}` syntax. Resolution happens at each executable call si
 Built-in variables are available in commands, `pre`, aliases, and relationship targets:
 
 - `{{ session-name }}` — rendered root/session name;
-- `{{ window.name }}` — rendered current `WINDOW` node name;
-- `{{ pane.name }}` — rendered current named pane root, or an empty string for an unnamed/implicit pane;
+- `{{ window-name }}` — rendered current `WINDOW` node name;
+- `{{ pane-name }}` — rendered current named pane root, or an empty string for an unnamed/implicit pane;
 - `{{ node-name }}` — rendered current command call-site node name.
 
-The compiler also injects object-style fields for the current window and pane:
-
-- `{{ window.<attribute> }}` exposes every Freeplane attribute declared on the effective window after WINDOW inheritance merge; `name` is reserved for the rendered window name.
-- `{{ pane.<attribute> }}` exposes every Freeplane attribute declared on the current pane root; `name` is reserved for the rendered pane name.
-- Root attributes remain ordinary flat globals such as `{{ mgmt }}` or `{{ environment }}`.
-
-Jinja expansion also applies to Freeplane node names before tmuxp emission. Session names may use root attributes, window names may additionally use `session-name` and `window.<attribute>`, pane names may use `session-name`, `window.name`, and `pane.<attribute>`, and executable node names may use all current builtins. For example, a pane node named `{{ window.name }}` inside window `mcmp2` is emitted with pane title `mcmp2`. The legacy `{{ window-name }}` and `{{ pane-name }}` aliases are rejected with a semantic error.
+Jinja expansion also applies to Freeplane node names before tmuxp emission. Session names may use root attributes, window names may additionally use `session-name`, pane names may use `session-name` and `window-name`, and executable node names may use all current builtins. For example, a pane node named `{{ window-name }}` inside window `mcmp2` is emitted with pane title `mcmp2`.
 
 An unresolved command, node name, `pre`, or alias at an executable call site is a semantic error. It is never silently emitted with broken placeholders.
 
@@ -328,7 +321,7 @@ REQUIRE_TMUXP_INTEGRATION=1 python3 -m pytest -q -m tmuxp_integration
 
 The integration suite requires `tmux` and `tmuxp`. GitHub Actions installs tmux and runs this suite in a dedicated Python 3.12 job.
 
-The tests cover historical map-to-tmuxp compatibility, real tmuxp topology loading, ordered multi-relationship expansion, helper relationship leaf and subtree expansion, WINDOW inheritance merge precedence, inherited-pane re-rendering in the derived window context, explicit-pane replacement by rendered title, implicit-pane ordering, OSC pane titles without tmux-version-specific options, implicit and pane-list modes, path inheritance, `pre` chaining, environment and alias bootstrap across `ssh`/`sudo`, alias late resolution, unresolved alias failures, the direct Groovy terminal path, runtime loading, and HTML cleanup.
+The tests cover historical map-to-tmuxp compatibility, real tmuxp topology loading, ordered multi-relationship expansion, own-command/relationship/child ordering, relationship leaf and subtree expansion, window-root relationships, OSC pane titles without tmux-version-specific options, implicit and pane-list modes, path inheritance, `pre` chaining, environment and alias bootstrap across `ssh`/`sudo`, alias late resolution, unresolved alias failures, the direct Groovy terminal path, runtime loading, and HTML cleanup.
 
 ## Known boundaries
 

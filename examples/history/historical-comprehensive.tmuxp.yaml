@@ -1,6 +1,7 @@
 session_name: tmux sesion-name
 windows:
 - window_name: example1
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -28,6 +29,7 @@ windows:
       ENV_TEST: abc
       ENV_TEST2: bca
 - window_name: example2
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -55,6 +57,7 @@ windows:
       ENV_TEST: abc
       ENV_TEST2: bca
 - window_name: example3
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -83,6 +86,7 @@ windows:
       ENV_TEST: abc
       ENV_TEST2: bca
 - window_name: example4
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -134,6 +138,7 @@ windows:
       ENV_TEST: abc
       ENV_TEST2: bca
 - window_name: DEEP COMMANDS
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -197,6 +202,7 @@ windows:
       ENV_TEST: abc
       ENV_TEST2: bca
 - window_name: with description
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -244,6 +250,7 @@ windows:
       ENV_TEST: abc
       ENV_TEST2: bca
 - window_name: with description multiple command
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -341,6 +348,7 @@ windows:
       ENV_TEST: abc
       ENV_TEST2: bca
 - window_name: дескрипшены в командах
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -425,6 +433,7 @@ windows:
       ENV_TEST: abc
       ENV_TEST2: bca
 - window_name: с ссылками на функции
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -512,6 +521,7 @@ windows:
       ENV_TEST: abc
       ENV_TEST2: bca
 - window_name: pane ссылаются на функцию
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -610,6 +620,7 @@ windows:
       ENV_TEST: abc
       ENV_TEST2: bca
 - window_name: very simple windows
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -637,6 +648,7 @@ windows:
       ENV_TEST: abc
       ENV_TEST2: bca
 - window_name: посложнее
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'

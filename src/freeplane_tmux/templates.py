@@ -39,14 +39,5 @@ def require_resolved(value: str, *, subject: str) -> str:
     missing = unresolved_keys(value)
     if missing:
         names = ", ".join(missing)
-        legacy = [name for name in missing if name in {"window-name", "pane-name"}]
-        legacy_hint = ""
-        if legacy:
-            replacements = ", ".join(
-                "window.name" if name == "window-name" else "pane.name" for name in legacy
-            )
-            legacy_hint = f"; legacy builtins were removed, use {replacements}"
-        raise SemanticError(
-            f"cannot resolve {subject}; unresolved template keys: {names}{legacy_hint}"
-        )
+        raise SemanticError(f"cannot resolve {subject}; unresolved template keys: {names}")
     return value

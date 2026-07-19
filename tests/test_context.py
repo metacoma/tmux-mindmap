@@ -174,169 +174,6 @@ def test_pane_title_uses_osc_without_allow_set_title() -> None:
     assert all("allow-set-title" not in command for command in emitted)
 
 
-def test_window_name_is_available_in_text_detail_and_pre() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                attributes={"pre": "echo pre {{ window.name }}", "window-mode": "single-pane"},
-                children=[
-                    node("text", "echo text {{ window.name }}"),
-                    node("detail", "ignored", detail="echo detail {{ window.name }}"),
-                ],
-            )
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    assert pane.base_scope.pre == ("echo pre ops",)
-    assert [step.command for step in pane.steps] == [
-        "echo text ops",
-        "echo detail ops",
-    ]
-
-
-def test_pane_name_is_available_in_text_detail_and_pre() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                attributes={"window-mode": "pane-list"},
-                children=[
-                    node(
-                        "pane",
-                        "remote host",
-                        attributes={"pre": "echo pane-pre {{ pane.name }}"},
-                        children=[
-                            node("text", "echo text {{ pane.name }}"),
-                            node("detail", "ignored", detail="echo detail {{ pane.name }}"),
-                        ],
-                    )
-                ],
-            )
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    assert pane.base_scope.pre == ("echo pane-pre remote host",)
-    assert [step.command for step in pane.steps] == [
-        "echo text remote host",
-        "echo detail remote host",
-    ]
-
-
-def test_window_object_exposes_window_attributes() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "window",
-                "{{ window.host }}",
-                tags=["WINDOW"],
-                attributes={"host": "hw0076", "pre": "ssh {{ window.host }}"},
-                children=[
-                    node(
-                        "pane",
-                        "pane",
-                        children=[
-                            node(
-                                "command",
-                                "echo {{ window.name }} {{ window.host }} {{ window.pre }}",
-                            )
-                        ],
-                    )
-                ],
-            )
-        ],
-    )
-
-    session = compile_map(raw)
-    pane = session.windows[0].panes[0]
-    assert session.windows[0].name == "hw0076"
-    assert pane.base_scope.vars["window.name"] == "hw0076"
-    assert pane.base_scope.vars["window.host"] == "hw0076"
-    assert pane.base_scope.vars["window.pre"] == "ssh hw0076"
-    assert [step.command for step in pane.steps] == ["echo hw0076 hw0076 ssh hw0076"]
-
-
-def test_pane_object_exposes_pane_attributes() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[
-                    node(
-                        "pane",
-                        "{{ pane.host }}",
-                        attributes={
-                            "host": "db01",
-                            "pre": "ssh {{ pane.host }}",
-                            "name": "ignored",
-                        },
-                        children=[
-                            node(
-                                "command",
-                                "echo {{ pane.name }} {{ pane.host }} {{ pane.pre }}",
-                            )
-                        ],
-                    )
-                ],
-            )
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    assert pane.title == "db01"
-    assert pane.base_scope.vars["pane.name"] == "db01"
-    assert pane.base_scope.vars["pane.host"] == "db01"
-    assert pane.base_scope.vars["pane.pre"] == "ssh db01"
-    assert "pane.name" in pane.base_scope.vars
-    assert [step.command for step in pane.steps] == ["echo db01 db01 ssh db01"]
-
-
-def test_root_attributes_remain_flat_globals() -> None:
-    raw = node(
-        "root",
-        "demo",
-        attributes={"mgmt": "mgmt.example.org", "environment": "prod", "project": "mindmap"},
-        children=[
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[
-                    node(
-                        "pane",
-                        "pane",
-                        children=[
-                            node("command", "echo {{ mgmt }} {{ environment }} {{ project }}")
-                        ],
-                    )
-                ],
-            )
-        ],
-    )
-
-    step = compile_map(raw).windows[0].panes[0].steps[0]
-    assert step.effective_scope.vars["mgmt"] == "mgmt.example.org"
-    assert step.effective_scope.vars["environment"] == "prod"
-    assert step.effective_scope.vars["project"] == "mindmap"
-    assert step.command == "echo mgmt.example.org prod mindmap"
-
-
 def test_pane_name_builtin_is_available_across_pane_execution_path() -> None:
     raw = node(
         "root",
@@ -354,26 +191,26 @@ def test_pane_name_builtin_is_available_across_pane_execution_path() -> None:
                         children=[
                             node(
                                 "command",
-                                "echo own {{ pane.name }}",
+                                "echo own {{ pane-name }}",
                                 relationships=["helper"],
-                                children=[node("tail", "echo child {{ pane.name }}")],
+                                children=[node("tail", "echo child {{ pane-name }}")],
                             )
                         ],
                     )
                 ],
             ),
-            node("helper", "echo relationship {{ pane.name }}"),
+            node("helper", "echo relationship {{ pane-name }}"),
         ],
     )
 
     pane = compile_map(raw).windows[0].panes[0]
-    assert pane.base_scope.vars["pane.name"] == "remote host"
+    assert pane.base_scope.vars["pane-name"] == "remote host"
     assert [step.command for step in pane.steps] == [
         "echo own remote host",
         "echo relationship remote host",
         "echo child remote host",
     ]
-    assert all(step.effective_scope.vars["pane.name"] == "remote host" for step in pane.steps)
+    assert all(step.effective_scope.vars["pane-name"] == "remote host" for step in pane.steps)
 
 
 def test_pane_name_builtin_is_empty_for_unnamed_implicit_pane() -> None:
@@ -386,14 +223,14 @@ def test_pane_name_builtin_is_empty_for_unnamed_implicit_pane() -> None:
                 "ops",
                 tags=["WINDOW"],
                 attributes={"window-mode": "single-pane"},
-                children=[node("command", "printf '<%s>\\n' '{{ pane.name }}'")],
+                children=[node("command", "printf '<%s>\\n' '{{ pane-name }}'")],
             )
         ],
     )
 
     pane = compile_map(raw).windows[0].panes[0]
     assert pane.title is None
-    assert pane.base_scope.vars["pane.name"] == ""
+    assert pane.base_scope.vars["pane-name"] == ""
     assert [step.command for step in pane.steps] == ["printf '<%s>\\n' ''"]
 
 
@@ -411,12 +248,12 @@ def test_jinja_expands_session_window_pane_and_node_names() -> None:
                 children=[
                     node(
                         "pane",
-                        "{{ window.name }}",
+                        "{{ window-name }}",
                         children=[
-                            node("ssh", "ssh {{ pane.name }}"),
+                            node("ssh", "ssh {{ pane-name }}"),
                             node(
                                 "health",
-                                "health {{ window.name }}",
+                                "health {{ window-name }}",
                                 detail="echo {{ node-name }}",
                             ),
                         ],
@@ -433,39 +270,10 @@ def test_jinja_expands_session_window_pane_and_node_names() -> None:
     assert session.session_name == "session-lab"
     assert window.name == "mcmp2"
     assert pane.title == "mcmp2"
-    assert pane.base_scope.vars["window.name"] == "mcmp2"
-    assert pane.base_scope.vars["pane.name"] == "mcmp2"
+    assert pane.base_scope.vars["pane-name"] == "mcmp2"
     assert pane_shell_commands(pane)[0] == "printf '\\033]2;%s\\033\\\\' mcmp2"
     assert [step.display_name for step in pane.steps] == ["ssh mcmp2", "health mcmp2"]
     assert [step.command for step in pane.steps] == ["ssh mcmp2", "echo health mcmp2"]
-
-
-def test_legacy_window_and_pane_name_builtins_are_rejected() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                attributes={"window-mode": "pane-list"},
-                children=[
-                    node(
-                        "pane",
-                        "admin",
-                        children=[node("command", "echo {{ window-name }} {{ pane-name }}")],
-                    )
-                ],
-            )
-        ],
-    )
-
-    with pytest.raises(
-        SemanticError,
-        match=r"window-name, pane-name.*window\.name, pane\.name",
-    ):
-        compile_map(raw)
 
 
 def test_unresolved_template_in_pane_name_is_rejected() -> None:
@@ -481,7 +289,7 @@ def test_unresolved_template_in_pane_name_is_rejected() -> None:
                 children=[
                     node(
                         "pane",
-                        "{{ missing-pane.name }}",
+                        "{{ missing-pane-name }}",
                         children=[node("command", "uptime")],
                     )
                 ],
@@ -489,5 +297,5 @@ def test_unresolved_template_in_pane_name_is_rejected() -> None:
         ],
     )
 
-    with pytest.raises(SemanticError, match="pane name.*missing-pane.name"):
+    with pytest.raises(SemanticError, match="pane name.*missing-pane-name"):
         compile_map(raw)
