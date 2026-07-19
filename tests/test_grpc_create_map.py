@@ -21,11 +21,10 @@ def test_map_local_script_contains_dynamic_binary_path() -> None:
     )
 
     assert "// @ExecutionModes({ON_SELECTED_NODE})" in script
-    assert "--_launch-gui-terminal" in script
-    assert "--terminal-part" in script
+    assert "--launch-gui-terminal" in script
     assert "binaryFile.absolutePath" in script
     assert "/opt/freeplane-tmux/bin/freeplane-tmux" in script
-    assert 'terminalParts = ["gnome-terminal", "--"]' in script
+    assert 'def terminalCommand = "gnome-terminal --"' in script
 
 
 def test_create_map_groovy_quotes_untrusted_name_and_sets_script1() -> None:

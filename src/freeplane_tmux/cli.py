@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 from . import __version__
@@ -197,6 +199,27 @@ def _output_paths(args: argparse.Namespace, session_name: str) -> tuple[Path, Pa
     return json_path, yaml_path
 
 
+
+
+@contextmanager
+def _system_loader_env():
+    tracked = ["LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "LIBPATH"]
+    original = {name: os.environ.get(name) for name in tracked}
+    try:
+        for name in tracked:
+            orig_name = f"{name}_ORIG"
+            if orig_name in os.environ:
+                os.environ[name] = os.environ[orig_name]
+            else:
+                os.environ.pop(name, None)
+        yield
+    finally:
+        for name, value in original.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
 def _write_text(path: Path, value: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(value, encoding="utf-8")
@@ -217,7 +240,8 @@ def _run_tmuxp(path: Path, *, detached: bool) -> None:
     command.append(str(path))
 
     try:
-        tmuxp_cli(command)
+        with _system_loader_env():
+            tmuxp_cli(command)
     except SystemExit as exc:
         exit_code = exc.code if isinstance(exc.code, int) else 1
         if exit_code:

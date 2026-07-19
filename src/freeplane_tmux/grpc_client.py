@@ -90,15 +90,14 @@ def _map_local_script(
     terminal_command: str | None = None,
 ) -> str:
     binary_json = json.dumps(launcher_binary_path, ensure_ascii=False)
-    terminal_parts = shlex.split(terminal_command or "")
-    terminal_parts_json = json.dumps(terminal_parts, ensure_ascii=False)
+    terminal_json = json.dumps(terminal_command or "", ensure_ascii=False)
     return f"""
 // @ExecutionModes({{ON_SELECTED_NODE}})
 // @Permission_granted EXEC("execute external process")
 // @Permission_granted READ("read files")
 
 def freeplaneTmuxBinary = {binary_json}
-def terminalParts = {terminal_parts_json}
+def terminalCommand = {terminal_json}
 
 def binaryFile = new File(freeplaneTmuxBinary)
 if (!binaryFile.isFile()) {{
@@ -115,9 +114,9 @@ if (!hasGui) {{
     throw new RuntimeException("No GUI display detected (DISPLAY/WAYLAND_DISPLAY is not set)")
 }}
 
-def cmd = [binaryFile.absolutePath, "--_launch-gui-terminal", "--load"]
-terminalParts.each {{
-    cmd.add("--terminal-part=" + it.toString())
+def cmd = [binaryFile.absolutePath, "--launch-gui-terminal", "--load"]
+if (terminalCommand != null && terminalCommand.toString() != "") {{
+    cmd.add("--terminal=" + terminalCommand.toString())
 }}
 def pb = new ProcessBuilder(cmd.collect {{ it.toString() }})
 pb.redirectErrorStream(true)
