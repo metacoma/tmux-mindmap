@@ -1,7 +1,6 @@
 session_name: r/tmux
 windows:
 - window_name: hello-win
-  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -19,7 +18,6 @@ windows:
     - pwd
     - uptime
 - window_name: mcmp2
-  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -33,7 +31,6 @@ windows:
     - ssh mcmp2
     - hostname
 - window_name: mcmp3
-  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'

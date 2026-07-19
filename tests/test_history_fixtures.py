@@ -73,13 +73,3 @@ def test_mixed_window_fixture_has_two_panes_and_executes_both_echoes() -> None:
         ["echo pwd", "echo uptime"],
         ["who"],
     ]
-
-
-def test_generated_tmuxp_windows_default_to_main_horizontal_layout() -> None:
-    raw = json.loads((FIXTURE_DIR / "starter.map.json").read_text(encoding="utf-8"))
-
-    session = MindmapCompiler(RawNode.model_validate(raw)).compile()
-    tmuxp = session_to_tmuxp(session)
-
-    assert tmuxp["windows"]
-    assert all(window["layout"] == "main-horizontal" for window in tmuxp["windows"])

@@ -7,8 +7,6 @@ import yaml
 from .models import SessionSpec
 from .shell import pane_shell_commands
 
-DEFAULT_WINDOW_LAYOUT = "main-horizontal"
-
 
 def session_to_tmuxp(session: SessionSpec) -> dict[str, Any]:
     windows: list[dict[str, Any]] = []
@@ -26,7 +24,6 @@ def session_to_tmuxp(session: SessionSpec) -> dict[str, Any]:
             windows.append(
                 {
                     "window_name": window.name,
-                    "layout": DEFAULT_WINDOW_LAYOUT,
                     "options": {
                         "pane-border-status": "top",
                         "pane-border-format": "#{pane_index}: #{pane_title}",

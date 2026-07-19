@@ -85,14 +85,14 @@
           "attributes": {
             "pre": "ssh hw0076"
           },
-          "detail": "ping {{ window-name }}.{{ mgmt }}"
+          "detail": "ping {{ window.name }}.{{ mgmt }}"
         },
         {
-          "text": "{{ window-name }}",
+          "text": "{{ window.name }}",
           "id": "ID_1596710562",
           "children": [
             {
-              "text": "ssh {{ window-name }}",
+              "text": "ssh {{ window.name }}",
               "id": "ID_494287837"
             },
             {
@@ -116,14 +116,14 @@
           "attributes": {
             "pre": "ssh hw0076"
           },
-          "detail": "ping {{ window-name }}.{{ mgmt }}"
+          "detail": "ping {{ window.name }}.{{ mgmt }}"
         },
         {
-          "text": "{{ window-name }}",
+          "text": "{{ window.name }}",
           "id": "ID_573899147",
           "children": [
             {
-              "text": "ssh {{ window-name }}",
+              "text": "ssh {{ window.name }}",
               "id": "ID_1306028044"
             },
             {

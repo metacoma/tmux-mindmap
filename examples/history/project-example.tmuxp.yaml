@@ -1,7 +1,6 @@
 session_name: demo
 windows:
 - window_name: editor
-  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -15,7 +14,6 @@ windows:
     environment:
       PROJECT_DIR: /tmp/demo
 - window_name: ops
-  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'

@@ -1,7 +1,6 @@
 session_name: playground
 windows:
 - window_name: hello-win
-  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'

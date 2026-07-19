@@ -86,7 +86,7 @@ def _run(command: list[str], *, env: dict[str, str], check: bool = True) -> str:
 
 TEST_SESSION_COLUMNS = "240"
 TEST_SESSION_LINES = "80"
-TEST_SESSION_SIZE = f"{TEST_SESSION_COLUMNS}x{TEST_SESSION_LINES}"
+TEST_SESSION_BOOTSTRAP = "fp_tmux_bootstrap"
 
 
 def _read_pane_titles(
@@ -176,8 +176,30 @@ def test_tmuxp_load_creates_expected_window_and_pane_structure(
     env["LINES"] = TEST_SESSION_LINES
 
     try:
-        _run([tmux, "start-server"], env=env)
-        _run([tmux, "set-option", "-g", "default-size", TEST_SESSION_SIZE], env=env)
+        _run(
+            [
+                tmux,
+                "new-session",
+                "-d",
+                "-x",
+                TEST_SESSION_COLUMNS,
+                "-y",
+                TEST_SESSION_LINES,
+                "-s",
+                TEST_SESSION_BOOTSTRAP,
+            ],
+            env=env,
+        )
+        _run(
+            [
+                tmux,
+                "set-option",
+                "-g",
+                "default-size",
+                f"{TEST_SESSION_COLUMNS}x{TEST_SESSION_LINES}",
+            ],
+            env=env,
+        )
         _run([tmuxp, "load", "-d", str(runtime_path)], env=env)
         output = _run(
             [
