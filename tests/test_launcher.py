@@ -8,6 +8,8 @@ from freeplane_tmux.cli import build_parser, main
 from freeplane_tmux.launcher import (
     DEFAULT_TERMINAL_COMMAND,
     INSIDE_TERMINAL_FLAG,
+    LAUNCH_GUI_FLAG,
+    TERMINAL_COMMAND_FLAG,
     launch_gui_terminal,
     split_terminal_command,
 )
@@ -89,9 +91,8 @@ def test_hidden_launch_mode_rebuilds_load_args(monkeypatch) -> None:
     )
 
     result = main([
-        "--_launch-gui-terminal",
-        "--terminal-part=gnome-terminal",
-        "--terminal-part=--",
+        LAUNCH_GUI_FLAG,
+        f"{TERMINAL_COMMAND_FLAG}=gnome-terminal --",
         "--load",
         "--detached",
         "--pretty",
@@ -107,13 +108,38 @@ def test_hidden_launch_mode_rebuilds_load_args(monkeypatch) -> None:
     ]
 
 
+def test_hidden_launch_mode_legacy_terminal_parts_still_work(monkeypatch) -> None:
+    captured: list[dict[str, object]] = []
+
+    monkeypatch.setattr("freeplane_tmux.cli._current_binary_path", lambda: "/tmp/freeplane-tmux")
+    monkeypatch.setattr(
+        "freeplane_tmux.cli.launch_gui_terminal",
+        lambda **kwargs: captured.append(kwargs),
+    )
+
+    result = main([
+        "--_launch-gui-terminal",
+        "--terminal-part=gnome-terminal",
+        "--terminal-part=--",
+        "--load",
+    ])
+
+    assert result == 0
+    assert captured == [
+        {
+            "binary_path": "/tmp/freeplane-tmux",
+            "terminal_command": "gnome-terminal --",
+            "inner_argv": ["--load"],
+        }
+    ]
+
+
 def test_parser_accepts_hidden_launcher_flags() -> None:
     args = build_parser().parse_args([
-        "--_launch-gui-terminal",
-        "--_freeplane-tmux-inside-terminal",
-        "--terminal-part=xterm",
-        "--terminal-part=-e",
+        LAUNCH_GUI_FLAG,
+        INSIDE_TERMINAL_FLAG,
+        f"{TERMINAL_COMMAND_FLAG}=xterm -e",
     ])
     assert args.launch_gui_terminal is True
     assert args.inside_terminal is True
-    assert args.terminal_parts == ["xterm", "-e"]
+    assert args.terminal_command == "xterm -e"

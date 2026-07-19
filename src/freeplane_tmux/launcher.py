@@ -8,8 +8,11 @@ import sys
 from pathlib import Path
 
 DEFAULT_TERMINAL_COMMAND = "x-terminal-emulator -e"
-INSIDE_TERMINAL_FLAG = "--_freeplane-tmux-inside-terminal"
-LAUNCH_GUI_FLAG = "--_launch-gui-terminal"
+INSIDE_TERMINAL_FLAG = "--inside-terminal"
+INSIDE_TERMINAL_FLAG_LEGACY = "--_freeplane-tmux-inside-terminal"
+LAUNCH_GUI_FLAG = "--launch-gui-terminal"
+LAUNCH_GUI_FLAG_LEGACY = "--_launch-gui-terminal"
+TERMINAL_COMMAND_FLAG = "--terminal"
 TERMINAL_PART_FLAG = "--terminal-part"
 PAUSE_ON_ERROR = True
 

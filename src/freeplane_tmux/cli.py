@@ -11,7 +11,10 @@ from . import __version__
 from .errors import SemanticError
 from .launcher import (
     INSIDE_TERMINAL_FLAG,
+    INSIDE_TERMINAL_FLAG_LEGACY,
     LAUNCH_GUI_FLAG,
+    LAUNCH_GUI_FLAG_LEGACY,
+    TERMINAL_COMMAND_FLAG,
     TERMINAL_PART_FLAG,
     launch_gui_terminal,
     pause_for_terminal_exit,
@@ -111,14 +114,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output")
     parser.add_argument(
         LAUNCH_GUI_FLAG,
+        LAUNCH_GUI_FLAG_LEGACY,
         dest="launch_gui_terminal",
         action="store_true",
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
         INSIDE_TERMINAL_FLAG,
+        INSIDE_TERMINAL_FLAG_LEGACY,
         dest="inside_terminal",
         action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        TERMINAL_COMMAND_FLAG,
+        dest="terminal_command",
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
@@ -230,6 +240,15 @@ def _normalize_terminal_parts(parts: list[object]) -> list[str]:
     return normalized
 
 
+def _resolve_hidden_terminal_command(args: argparse.Namespace) -> str | None:
+    if args.terminal_command:
+        return args.terminal_command
+    terminal_parts = _normalize_terminal_parts(args.terminal_parts)
+    if terminal_parts:
+        return " ".join(terminal_parts)
+    return None
+
+
 def _rebuild_cli_args(args: argparse.Namespace) -> list[str]:
     rebuilt: list[str] = []
     if args.addr:
@@ -265,10 +284,9 @@ def _rebuild_cli_args(args: argparse.Namespace) -> list[str]:
 def _run_main(args: argparse.Namespace) -> int:
     _validate_mode_combinations(args)
     if args.launch_gui_terminal:
-        terminal_parts = _normalize_terminal_parts(args.terminal_parts)
         launch_gui_terminal(
             binary_path=_current_binary_path(),
-            terminal_command=(" ".join(terminal_parts) if terminal_parts else None),
+            terminal_command=_resolve_hidden_terminal_command(args),
             inner_argv=_rebuild_cli_args(args),
         )
         return 0
