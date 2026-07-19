@@ -68,6 +68,7 @@ def test_env_and_alias_bootstrap_are_injected_into_ssh_and_sudo() -> None:
         assert "export TOKEN=secret" in rewritten
         assert "alias ll=" in rewritten
         assert "ls -la /srv" in rewritten
+        assert "clear" in rewritten
         assert "--rcfile" in rewritten
 
 
@@ -93,6 +94,57 @@ def test_alias_uses_late_resolve_from_descendant_scope() -> None:
     emitted = pane_shell_commands(pane)
     assert "alias go='cd /tmp/project'" in emitted
     assert emitted.index("alias go='cd /tmp/project'") < emitted.index("go")
+
+
+def test_single_alias_is_followed_by_clear() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node("alias", "go", tags=["ALIAS"], detail="cd /tmp/project"),
+            node("window", "ops", tags=["WINDOW"], children=[node("command", "go")]),
+        ],
+    )
+
+    emitted = pane_shell_commands(compile_map(raw).windows[0].panes[0])
+    alias_index = emitted.index("alias go='cd /tmp/project'")
+    assert emitted[alias_index + 1] == "clear"
+
+
+def test_multiple_aliases_each_get_their_own_clear() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node("alias-1", "k", tags=["ALIAS"], detail="kubectl"),
+            node("alias-2", "kg", tags=["ALIAS"], detail="kubectl get"),
+            node("window", "ops", tags=["WINDOW"], children=[node("command", "kg pods")]),
+        ],
+    )
+
+    emitted = pane_shell_commands(compile_map(raw).windows[0].panes[0])
+    assert emitted == [
+        "shopt -s expand_aliases",
+        "alias k=kubectl",
+        "clear",
+        "alias kg='kubectl get'",
+        "clear",
+        "kg pods",
+    ]
+
+
+def test_clear_is_not_added_when_no_alias_is_used() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node("window", "ops", tags=["WINDOW"], children=[node("command", "echo ok")]),
+        ],
+    )
+
+    emitted = pane_shell_commands(compile_map(raw).windows[0].panes[0])
+    assert emitted == ["echo ok"]
+    assert "clear" not in emitted
 
 
 def test_unresolved_alias_fails_at_executable_callsite() -> None:
@@ -128,6 +180,26 @@ def test_alias_detail_wins_over_relationship() -> None:
 
     pane = compile_map(raw).windows[0].panes[0]
     assert pane.steps[0].effective_scope.aliases == {"run": "echo detail"}
+
+
+def test_alias_relationship_path_adds_clear() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node("helper", "echo helper"),
+            node("alias", "run", tags=["ALIAS"], relationship="helper"),
+            node("window", "ops", tags=["WINDOW"], children=[node("cmd", "run")]),
+        ],
+    )
+
+    emitted = pane_shell_commands(compile_map(raw).windows[0].panes[0])
+    assert emitted == [
+        "shopt -s expand_aliases",
+        "alias run='echo helper'",
+        "clear",
+        "run",
+    ]
 
 
 def test_non_shell_sudo_command_is_not_rewritten() -> None:

@@ -40,11 +40,19 @@ def _has_ssh_tty_option(tokens: Sequence[str]) -> bool:
     return False
 
 
+def _alias_commands(aliases: dict[str, str]) -> list[str]:
+    commands: list[str] = []
+    if aliases:
+        commands.append("shopt -s expand_aliases")
+    for name, body in aliases.items():
+        commands.append(f"alias {name}={shlex.quote(body)}")
+        commands.append("clear")
+    return commands
+
+
 def _shell_rc(env: dict[str, str], aliases: dict[str, str]) -> str:
     lines = [f"export {key}={shlex.quote(value)}" for key, value in env.items()]
-    if aliases:
-        lines.append("shopt -s expand_aliases")
-        lines.extend(f"alias {name}={shlex.quote(body)}" for name, body in aliases.items())
+    lines.extend(_alias_commands(aliases))
     return "\n".join(lines)
 
 
@@ -194,13 +202,8 @@ def _alias_sync(current: dict[str, str], target: dict[str, str]) -> list[str]:
     commands = [
         f"unalias {name} 2>/dev/null || true" for name in sorted(set(current) - set(target))
     ]
-    if target and target != current:
-        commands.append("shopt -s expand_aliases")
-    commands.extend(
-        f"alias {name}={shlex.quote(body)}"
-        for name, body in target.items()
-        if current.get(name) != body
-    )
+    changed_aliases = {name: body for name, body in target.items() if current.get(name) != body}
+    commands.extend(_alias_commands(changed_aliases))
     return commands
 
 

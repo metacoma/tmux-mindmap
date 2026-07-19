@@ -10,6 +10,7 @@ windows:
     - export PROJECT_DIR=/tmp/demo
     - shopt -s expand_aliases
     - alias cproj='cd /tmp/demo'
+    - clear
     - cd /tmp/demo
     - nvim
     environment:
@@ -24,6 +25,7 @@ windows:
     - export PROJECT_DIR=/tmp/demo
     - shopt -s expand_aliases
     - alias cproj='cd /tmp/demo'
+    - clear
     - printf '\033]2;%s\033\\' shell
     - cd /tmp/demo
     - bash
@@ -33,6 +35,7 @@ windows:
     - export PROJECT_DIR=/tmp/demo
     - shopt -s expand_aliases
     - alias cproj='cd /tmp/demo'
+    - clear
     - printf '\033]2;%s\033\\' logs
     - cd /tmp/demo
     - journalctl -f

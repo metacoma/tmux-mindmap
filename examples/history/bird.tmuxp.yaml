@@ -9,8 +9,11 @@ windows:
   - shell_command:
     - shopt -s expand_aliases
     - alias stop='systemctl stop bird'
+    - clear
     - alias start='systemctl start bird'
+    - clear
     - alias status='systemctl status bird'
+    - clear
     - printf '\033]2;%s\033\\' config
     - 'sudo env bash -lc ''tmp=$(mktemp)
 
@@ -22,9 +25,15 @@ windows:
 
       alias stop=''"''"''systemctl stop bird''"''"''
 
+      clear
+
       alias start=''"''"''systemctl start bird''"''"''
 
+      clear
+
       alias status=''"''"''systemctl status bird''"''"''
+
+      clear
 
       FREEPLANE_TMUX_RC
 
@@ -33,8 +42,11 @@ windows:
   - shell_command:
     - shopt -s expand_aliases
     - alias stop='systemctl stop bird'
+    - clear
     - alias start='systemctl start bird'
+    - clear
     - alias status='systemctl status bird'
+    - clear
     - printf '\033]2;%s\033\\' ops
     - 'sudo env bash -lc ''tmp=$(mktemp)
 
@@ -46,9 +58,15 @@ windows:
 
       alias stop=''"''"''systemctl stop bird''"''"''
 
+      clear
+
       alias start=''"''"''systemctl start bird''"''"''
 
+      clear
+
       alias status=''"''"''systemctl status bird''"''"''
+
+      clear
 
       FREEPLANE_TMUX_RC
 
