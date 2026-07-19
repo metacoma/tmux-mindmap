@@ -113,7 +113,10 @@ def test_create_live_map_calls_groovy(monkeypatch) -> None:
     assert "c.newMap()" in calls["request"].groovy_code
     assert "newMap.root['script1'] = launcherScript" in calls["request"].groovy_code
     assert 'def helloWindow = newMap.root.createChild("hello-win")' in calls["request"].groovy_code
-    assert 'def helloCommand = helloWindow.createChild("echo hello world")' in calls["request"].groovy_code
+    assert (
+        'def helloCommand = helloWindow.createChild("echo hello world")'
+        in calls["request"].groovy_code
+    )
     assert 'def helloWindowId = helloWindow.id' in calls["request"].groovy_code
     assert 'def helloCommandId = helloCommand.id' in calls["request"].groovy_code
     assert 'helloWindow.tags.add("WINDOW")' in calls["request"].groovy_code
