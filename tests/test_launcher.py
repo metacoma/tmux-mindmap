@@ -60,6 +60,8 @@ def test_launch_gui_terminal_spawns_expected_command(monkeypatch, tmp_path: Path
         "--pretty",
     ]
     assert popen_calls[0]["start_new_session"] is True
+    child_env = popen_calls[0]["env"]
+    assert child_env["PYINSTALLER_RESET_ENVIRONMENT"] == "1"
 
 
 def test_launch_gui_terminal_requires_gui(monkeypatch, tmp_path: Path) -> None:

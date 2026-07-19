@@ -68,11 +68,23 @@ def launch_gui_terminal(
 
     command = [*terminal_parts, binary_path, INSIDE_TERMINAL_FLAG, *inner_argv]
     child_env = os.environ.copy()
-    removed_env = {name: child_env.pop(name) for name in ("TMUX", "TMUX_PANE") if name in child_env}
+    removed_tmux = {
+        name: child_env.pop(name)
+        for name in ("TMUX", "TMUX_PANE")
+        if name in child_env
+    }
+    removed_pyi = {
+        name: child_env.pop(name)
+        for name in list(child_env)
+        if name.startswith("_PYI_")
+    }
+    child_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
     append_launch_log(
         "launch_gui_terminal command="
         f"{command!r} cwd={os.getcwd()!r} display={os.environ.get('DISPLAY')!r} "
-        f"wayland={os.environ.get('WAYLAND_DISPLAY')!r} removed_tmux={removed_env!r}"
+        f"wayland={os.environ.get('WAYLAND_DISPLAY')!r} removed_tmux={removed_tmux!r} "
+        f"removed_pyi={sorted(removed_pyi)!r} "
+        f"reset_env={child_env.get('PYINSTALLER_RESET_ENVIRONMENT')!r}"
     )
     with launch_log.open("ab") as log_file:
         subprocess.Popen(

@@ -11,7 +11,7 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parent
 _SRC = _ROOT / "src"
 _PACKAGE = _SRC / "freeplane_tmux"
-__version__ = "0.2.18"
+__version__ = "0.2.19"
 
 if __name__ == "freeplane_tmux":
     # Let imports from a source checkout treat this compatibility file as a
