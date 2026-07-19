@@ -1,0 +1,33 @@
+{
+  "text": "workdir-demo",
+  "id": "ID_WORKDIR_ROOT",
+  "children": [
+    {
+      "text": "ops",
+      "id": "ID_WORKDIR_WINDOW",
+      "children": [
+        {
+          "text": "pwd",
+          "id": "ID_WORKDIR_PWD"
+        },
+        {
+          "text": "second pane",
+          "id": "ID_WORKDIR_PANE",
+          "children": [
+            {
+              "text": "pwd",
+              "id": "ID_WORKDIR_PANE_PWD"
+            }
+          ]
+        }
+      ],
+      "tags": [
+        "WINDOW"
+      ]
+    }
+  ],
+  "attributes": {
+    "base": "/tmp",
+    "workdir": "{{ base }}"
+  }
+}

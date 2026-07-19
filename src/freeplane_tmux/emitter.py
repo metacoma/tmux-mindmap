@@ -32,7 +32,11 @@ def session_to_tmuxp(session: SessionSpec) -> dict[str, Any]:
                 }
             )
 
-    return {"session_name": session.session_name, "windows": windows}
+    config: dict[str, Any] = {"session_name": session.session_name}
+    if session.start_directory is not None:
+        config["start_directory"] = session.start_directory
+    config["windows"] = windows
+    return config
 
 
 def dump_tmuxp_yaml(data: dict[str, Any]) -> str:

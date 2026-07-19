@@ -11,7 +11,7 @@
           "id": "ID_SCOPE_PANE",
           "children": [
             {
-              "text": "ssh {{ window-name }}.{{ mgmt }}",
+              "text": "ssh {{ window.name }}.{{ mgmt }}",
               "id": "ID_SCOPE_SSH"
             },
             {

@@ -101,4 +101,5 @@ class WindowSpec:
 class SessionSpec:
     session_id: str
     session_name: str
+    start_directory: str | None
     windows: tuple[WindowSpec, ...]

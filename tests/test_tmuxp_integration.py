@@ -150,6 +150,11 @@ def test_tmuxp_load_creates_expected_window_and_pane_structure(
     expected = yaml.safe_load((FIXTURE_DIR / case["tmuxp"]).read_text(encoding="utf-8"))
     session_name = f"fp_tmux_it_{case['name'].replace('-', '_')}_{os.getpid()}"
     runtime_config = _runtime_safe_config(expected, session_name)
+    runtime_start_directory: Path | None = None
+    if "start_directory" in expected:
+        runtime_start_directory = tmp_path / "session-workdir"
+        runtime_start_directory.mkdir()
+        runtime_config["start_directory"] = str(runtime_start_directory)
     runtime_path = tmp_path / f"{case['name']}.tmuxp.yaml"
     runtime_path.write_text(
         yaml.safe_dump(runtime_config, allow_unicode=True, sort_keys=False),
@@ -215,6 +220,24 @@ def test_tmuxp_load_creates_expected_window_and_pane_structure(
             ):
                 if expected_title is not None:
                     assert actual_title == expected_title
+
+        if runtime_start_directory is not None:
+            pane_paths = _run(
+                [
+                    tmux,
+                    "list-panes",
+                    "-s",
+                    "-t",
+                    session_name,
+                    "-F",
+                    "#{pane_current_path}",
+                ],
+                env=env,
+            ).splitlines()
+            assert pane_paths
+            assert {Path(path).resolve() for path in pane_paths} == {
+                runtime_start_directory.resolve()
+            }
     finally:
         _run([tmux, "kill-server"], env=env, check=False)
 

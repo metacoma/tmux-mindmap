@@ -49,6 +49,16 @@
       "name": "mixed-window",
       "map": "mixed-window.map.json",
       "tmuxp": "mixed-window.tmuxp.yaml"
+    },
+    {
+      "name": "session-workdir",
+      "map": "session-workdir.map.json",
+      "tmuxp": "session-workdir.tmuxp.yaml"
+    },
+    {
+      "name": "window-inheritance",
+      "map": "window-inheritance.map.json",
+      "tmuxp": "window-inheritance.tmuxp.yaml"
     }
   ]
 }
