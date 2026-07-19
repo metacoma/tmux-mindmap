@@ -24,7 +24,9 @@ def _write_workspace(path: Path, *, session_name: str = "demo") -> None:
     )
 
 
-def test_run_tmuxp_uses_bundled_cli_and_replaces_existing_session(monkeypatch, tmp_path: Path) -> None:
+def test_run_tmuxp_uses_bundled_cli_and_replaces_existing_session(
+    monkeypatch, tmp_path: Path
+) -> None:
     calls: list[tuple[list[str], str | None, str | None]] = []
     tmux_calls: list[tuple[list[str], str | None, str | None]] = []
 
