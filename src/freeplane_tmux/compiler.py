@@ -56,11 +56,11 @@ class MindmapCompiler:
 
     def _validate_relationship_targets(self) -> None:
         for node in self.index.values():
-            target_id = self._relationship_target_id(node)
-            if target_id is not None and target_id not in self.index:
-                raise SemanticError(
-                    f"node {node.id!r} references unknown relationship target {target_id!r}"
-                )
+            for target_id in self._relationship_target_ids(node):
+                if target_id not in self.index:
+                    raise SemanticError(
+                        f"node {node.id!r} references unknown relationship target {target_id!r}"
+                    )
 
     def _collect_windows(self) -> tuple[_WindowLocation, ...]:
         found: list[_WindowLocation] = []
@@ -85,12 +85,11 @@ class MindmapCompiler:
         return [child for child in node.children if not self._is_alias(child)]
 
     @staticmethod
-    def _relationship_target_id(node: RawNode) -> str | None:
-        return node.relationships[0].target_id if node.relationships else None
+    def _relationship_target_ids(node: RawNode) -> tuple[str, ...]:
+        return tuple(relationship.target_id for relationship in node.relationships)
 
-    def _relationship_target(self, node: RawNode) -> RawNode | None:
-        target_id = self._relationship_target_id(node)
-        return self.index[target_id] if target_id is not None else None
+    def _relationship_targets(self, node: RawNode) -> tuple[RawNode, ...]:
+        return tuple(self.index[target_id] for target_id in self._relationship_target_ids(node))
 
     def _node_layer(self, node: RawNode) -> ScopeLayer:
         attributes = split_attributes(node.attributes)
@@ -125,14 +124,18 @@ class MindmapCompiler:
         relationship_stack: tuple[str, ...],
     ) -> list[str]:
         commands: list[str] = []
-        target = self._relationship_target(alias_node)
+        targets = self._relationship_targets(alias_node)
 
         if alias_node.detail and alias_node.detail.strip():
             commands.extend(split_shell_commands(alias_node.detail))
-        elif target is not None:
-            commands.extend(
-                self._compile_function_template(target, relationship_stack=relationship_stack)
-            )
+        elif targets:
+            for target in targets:
+                commands.extend(
+                    self._compile_function_template(
+                        target,
+                        relationship_stack=relationship_stack,
+                    )
+                )
         elif alias_node.text.strip():
             commands.extend(split_shell_commands(alias_node.text))
 
@@ -155,20 +158,15 @@ class MindmapCompiler:
 
         next_stack = (*relationship_stack, node.id)
         children = self._non_alias_children(node)
-        target = self._relationship_target(node)
+        targets = self._relationship_targets(node)
         commands: list[str] = []
 
         if node.detail and node.detail.strip():
             commands.extend(split_shell_commands(node.detail))
-            if target is not None:
-                commands.extend(
-                    self._compile_function_template(
-                        target,
-                        relationship_stack=next_stack,
-                        function_root=True,
-                    )
-                )
-        elif target is not None:
+        elif node.text.strip() and (not function_root or not children):
+            commands.extend(split_shell_commands(node.text))
+
+        for target in targets:
             commands.extend(
                 self._compile_function_template(
                     target,
@@ -176,8 +174,6 @@ class MindmapCompiler:
                     function_root=True,
                 )
             )
-        elif node.text.strip() and (not function_root or not children):
-            commands.extend(split_shell_commands(node.text))
 
         for child in children:
             commands.extend(
@@ -259,13 +255,13 @@ class MindmapCompiler:
         *,
         session_name: str,
         window_name: str,
-        pane_title: str | None,
+        pane_name: str | None,
         node_name: str,
     ) -> dict[str, str]:
         return {
             "session-name": session_name,
             "window-name": window_name,
-            "pane-name": pane_title or "",
+            "pane-name": pane_name or "",
             "node-name": node_name,
         }
 
@@ -276,12 +272,21 @@ class MindmapCompiler:
         *,
         include_local_layer: bool,
     ) -> tuple[ScopeLayer, ...]:
-        layers = list(inherited_layers)
-        target = self._relationship_target(node)
-        if target is not None:
-            layers.append(self._node_layer(target))
-        if include_local_layer:
-            layers.append(self._node_layer(node))
+        if not include_local_layer:
+            return inherited_layers
+        return (*inherited_layers, self._node_layer(node))
+
+    def _layers_for_relationship(
+        self,
+        inherited_layers: tuple[ScopeLayer, ...],
+        callsite: RawNode,
+        target: RawNode,
+        *,
+        include_callsite_layer: bool,
+    ) -> tuple[ScopeLayer, ...]:
+        layers = [*inherited_layers, self._node_layer(target)]
+        if include_callsite_layer:
+            layers.append(self._node_layer(callsite))
         return tuple(layers)
 
     def _compile_implicit_pane(
@@ -300,7 +305,7 @@ class MindmapCompiler:
             builtins=self._builtins(
                 session_name=session_name,
                 window_name=window.text,
-                pane_title=None,
+                pane_name=None,
                 node_name=window.text if (window.detail or window.relationships) else "",
             ),
             strict=False,
@@ -313,8 +318,9 @@ class MindmapCompiler:
                 inherited_layers=ancestor_layers,
                 session_name=session_name,
                 window_name=window.text,
-                pane_title=None,
+                pane_name=None,
                 relationship_stack=(),
+                allow_text_payload=False,
             )
         else:
             window_layers = (*ancestor_layers, self._node_layer(window))
@@ -326,7 +332,7 @@ class MindmapCompiler:
                         inherited_layers=window_layers,
                         session_name=session_name,
                         window_name=window.text,
-                        pane_title=None,
+                        pane_name=None,
                         relationship_stack=(),
                     )
                 )
@@ -361,7 +367,7 @@ class MindmapCompiler:
             builtins=self._builtins(
                 session_name=session_name,
                 window_name=window.text,
-                pane_title=title,
+                pane_name=title,
                 node_name=pane_root.text,
             ),
             strict=False,
@@ -378,7 +384,7 @@ class MindmapCompiler:
                         inherited_layers=inherited,
                         session_name=session_name,
                         window_name=window.text,
-                        pane_title=title,
+                        pane_name=title,
                         relationship_stack=(),
                     )
                 )
@@ -388,8 +394,9 @@ class MindmapCompiler:
                 inherited_layers=window_layers,
                 session_name=session_name,
                 window_name=window.text,
-                pane_title=title,
+                pane_name=title,
                 relationship_stack=(),
+                allow_text_payload=False,
             )
 
         return PaneSpec(
@@ -404,9 +411,11 @@ class MindmapCompiler:
         target: RawNode,
         *,
         inherited_layers: tuple[ScopeLayer, ...],
+        callsite: RawNode,
+        include_callsite_layer: bool,
         session_name: str,
         window_name: str,
-        pane_title: str | None,
+        pane_name: str | None,
         callsite_node_name: str,
         relationship_stack: tuple[str, ...],
     ) -> list[CommandStep]:
@@ -414,12 +423,18 @@ class MindmapCompiler:
             cycle = " -> ".join([*relationship_stack, target.id])
             raise SemanticError(f"relationship cycle detected: {cycle}")
 
+        relationship_layers = self._layers_for_relationship(
+            inherited_layers,
+            callsite,
+            target,
+            include_callsite_layer=include_callsite_layer,
+        )
         return self._expand_node(
             target,
-            inherited_layers=inherited_layers,
+            inherited_layers=relationship_layers,
             session_name=session_name,
             window_name=window_name,
-            pane_title=pane_title,
+            pane_name=pane_name,
             relationship_stack=(*relationship_stack, target.id),
             node_name_override=callsite_node_name,
             include_local_layer=False,
@@ -433,14 +448,15 @@ class MindmapCompiler:
         inherited_layers: tuple[ScopeLayer, ...],
         session_name: str,
         window_name: str,
-        pane_title: str | None,
+        pane_name: str | None,
         relationship_stack: tuple[str, ...],
         node_name_override: str | None = None,
         include_local_layer: bool = True,
         function_root: bool = False,
+        allow_text_payload: bool = True,
     ) -> list[CommandStep]:
-        target = self._relationship_target(node)
-        effective_layers = self._layers_for_node(
+        targets = self._relationship_targets(node)
+        local_layers = self._layers_for_node(
             inherited_layers,
             node,
             include_local_layer=include_local_layer,
@@ -448,18 +464,18 @@ class MindmapCompiler:
         node_name = node_name_override if node_name_override is not None else node.text
         children = self._non_alias_children(node)
         uses_text_payload = bool(
-            node.text.strip()
+            allow_text_payload
+            and node.text.strip()
             and not node.detail
-            and target is None
             and (not function_root or not children)
         )
         has_direct_payload = bool(node.detail and node.detail.strip()) or uses_text_payload
         scope = self._resolver.resolve(
-            effective_layers,
+            local_layers,
             builtins=self._builtins(
                 session_name=session_name,
                 window_name=window_name,
-                pane_title=pane_title,
+                pane_name=pane_name,
                 node_name=node_name,
             ),
             strict=has_direct_payload,
@@ -477,31 +493,7 @@ class MindmapCompiler:
                     scope=scope,
                 )
             )
-            if target is not None:
-                steps.extend(
-                    self._expand_relationship_target(
-                        target,
-                        inherited_layers=effective_layers,
-                        session_name=session_name,
-                        window_name=window_name,
-                        pane_title=pane_title,
-                        callsite_node_name=node_name,
-                        relationship_stack=relationship_stack,
-                    )
-                )
-        elif target is not None:
-            steps.extend(
-                self._expand_relationship_target(
-                    target,
-                    inherited_layers=effective_layers,
-                    session_name=session_name,
-                    window_name=window_name,
-                    pane_title=pane_title,
-                    callsite_node_name=node_name,
-                    relationship_stack=relationship_stack,
-                )
-            )
-        elif node.text.strip() and (not function_root or not children):
+        elif uses_text_payload:
             steps.extend(
                 self._command_steps(
                     node,
@@ -511,14 +503,29 @@ class MindmapCompiler:
                 )
             )
 
+        for target in targets:
+            steps.extend(
+                self._expand_relationship_target(
+                    target,
+                    inherited_layers=inherited_layers,
+                    callsite=node,
+                    include_callsite_layer=include_local_layer,
+                    session_name=session_name,
+                    window_name=window_name,
+                    pane_name=pane_name,
+                    callsite_node_name=node_name,
+                    relationship_stack=relationship_stack,
+                )
+            )
+
         for child in children:
             steps.extend(
                 self._expand_node(
                     child,
-                    inherited_layers=effective_layers,
+                    inherited_layers=local_layers,
                     session_name=session_name,
                     window_name=window_name,
-                    pane_title=pane_title,
+                    pane_name=pane_name,
                     relationship_stack=relationship_stack,
                     node_name_override=node_name_override,
                 )

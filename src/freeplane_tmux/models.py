@@ -36,11 +36,6 @@ class RawNode(BaseModel):
         self.detail = None if self.detail is None else str(self.detail)
         self.tags = [str(tag) for tag in self.tags]
         self.attributes = {str(key): value for key, value in self.attributes.items()}
-        if len(self.relationships) > 1:
-            raise ValueError(
-                f"node {self.id!r} has {len(self.relationships)} relationships; "
-                "the tmux compiler requires at most one target"
-            )
         return self
 
 

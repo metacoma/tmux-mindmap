@@ -1,0 +1,78 @@
+{
+  "text": "r/tmux",
+  "id": "ID_1090958577",
+  "children": [
+    {
+      "text": "hello-win",
+      "id": "ID_406064506",
+      "children": [
+        {
+          "text": "second pane",
+          "id": "ID_566685888",
+          "children": [
+            {
+              "text": "echo test",
+              "id": "ID_676707848"
+            }
+          ],
+          "relationships": [
+            {
+              "target_id": "ID_1377250091"
+            }
+          ]
+        },
+        {
+          "text": "remote host",
+          "id": "ID_1965280090",
+          "children": [
+            {
+              "text": "ssh hw0076",
+              "id": "ID_1782978489",
+              "children": [
+                {
+                  "text": "uptime",
+                  "id": "ID_1506212489"
+                }
+              ],
+              "relationships": [
+                {
+                  "target_id": "ID_1377250091"
+                },
+                {
+                  "target_id": "ID_1845896624"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "tags": [
+        "WINDOW"
+      ]
+    },
+    {
+      "text": "helpers",
+      "id": "ID_1215994215",
+      "children": [
+        {
+          "text": "uptime and hostname",
+          "id": "ID_1377250091",
+          "children": [
+            {
+              "text": "uptime",
+              "id": "ID_1975730410"
+            },
+            {
+              "text": "hostname",
+              "id": "ID_644776337"
+            }
+          ]
+        },
+        {
+          "text": "pwd",
+          "id": "ID_1845896624"
+        }
+      ]
+    }
+  ]
+}

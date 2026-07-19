@@ -197,24 +197,26 @@ window-mode = pane-list
 
 ### Command nodes
 
-For a normal command node:
+For a normal command node, execution order is deterministic:
 
-1. `detail` is used before `text`.
-2. If a relationship exists, its target is expanded after `detail`, or instead of `text` when no `detail` exists.
-3. Children continue the command sequence in tree order.
+1. its own command (`detail` when present, otherwise `text`),
+2. every relationship target in relationship-list order,
+3. children in tree order.
 
-A pane root can itself contain `detail`, a relationship, children, or just a leaf command.
+Window and pane-root text remains structural: it names the window or pane and is not executed.
+A root `detail` is still executable, and root relationships are expanded before root children.
 
 ### Relationships
 
-A node may reference at most one `target_id`.
+A node may reference one or more `target_id` values. They are expanded in the same order
+in which Freeplane exports the relationships.
 
-The target may be:
+Each target may be:
 
 - a leaf function containing one command, or
 - a composite function root whose subtree contains multiple commands.
 
-Relationship calls are supported from command nodes, pane roots, and window roots. A window with a relationship and no pane children becomes one implicit pane.
+Relationship calls are supported from command nodes, pane roots, and window roots. A window with relationships and no pane children becomes one implicit pane.
 
 The target root is expanded with call-site builtins and overrides. In particular, `window-name`, `pane-name`, `node-name`, variables, environment, and accumulated `pre` state come from the invocation path rather than the target's storage location. Target-root attributes act as defaults; call-site attributes override them.
 
@@ -228,6 +230,13 @@ Attributes are inherited along the actual path from the map root to the command.
 - `ALIAS` nodes define scoped shell aliases.
 
 Templates use `{{ name }}` syntax. Resolution happens at each executable call site, so an ancestor alias or variable may reference a value introduced or overridden further down the path.
+
+Built-in variables are available in commands, `pre`, aliases, and relationship targets:
+
+- `{{ session-name }}` — root/session name;
+- `{{ window-name }}` — current `WINDOW` node name;
+- `{{ pane-name }}` — current named pane root, or an empty string for an unnamed/implicit pane;
+- `{{ node-name }}` — current command call-site node name.
 
 An unresolved command, `pre`, or alias at an executable call site is a semantic error. It is never silently emitted with broken placeholders.
 
@@ -278,11 +287,11 @@ python3 -m pytest -q
 ruff check .
 ```
 
-The tests cover relationship leaf and subtree expansion, window-root relationships, implicit and pane-list modes, path inheritance, `pre` chaining, environment and alias bootstrap across `ssh`/`sudo`, alias late resolution, unresolved alias failures, the direct Groovy terminal path, runtime loading, and HTML cleanup.
+The tests cover ordered multi-relationship expansion, own-command/relationship/child ordering, relationship leaf and subtree expansion, window-root relationships, OSC pane titles without tmux-version-specific options, implicit and pane-list modes, path inheritance, `pre` chaining, environment and alias bootstrap across `ssh`/`sudo`, alias late resolution, unresolved alias failures, the direct Groovy terminal path, runtime loading, and HTML cleanup.
 
 ## Known boundaries
 
-- A relationship is intentionally limited to one target. Multiple targets are rejected instead of being resolved by order-dependent behavior.
+- Relationship order is significant and follows the order exported by Freeplane.
 - Context bootstrap targets interactive `ssh` calls without an existing remote command and `sudo` shell transitions. An `ssh host some-command` invocation is treated as a self-contained remote command and is left unchanged.
 - Alias transport uses Bash because POSIX shells do not provide a portable alias initialization mechanism.
 - The bundled protobuf modules cover only the RPCs used by this project.

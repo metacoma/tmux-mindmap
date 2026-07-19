@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from conftest import compile_map, node
 
 
@@ -40,7 +43,10 @@ def test_relationship_to_leaf_uses_callsite_context() -> None:
         ],
     )
 
-    assert commands(compile_map(raw)) == ["echo ops deploy caller"]
+    assert commands(compile_map(raw)) == [
+        "deploy",
+        "echo ops deploy caller",
+    ]
 
 
 def test_relationship_to_composite_subtree() -> None:
@@ -71,6 +77,7 @@ def test_relationship_to_composite_subtree() -> None:
     )
 
     assert commands(compile_map(raw)) == [
+        "run",
         "echo one run",
         "echo two run",
         "echo three run",
@@ -185,7 +192,8 @@ def test_relationship_target_pre_and_env_resolve_with_callsite_override() -> Non
     )
 
     pane = compile_map(raw).windows[0].panes[0]
-    step = pane.steps[0]
+    assert pane.steps[0].command == "deploy"
+    step = pane.steps[1]
     assert step.command == "echo $HOST"
     assert step.effective_scope.env["HOST"] == "callsite.example"
     assert step.effective_scope.pre == ("echo preparing callsite.example for deploy",)
@@ -210,3 +218,47 @@ def test_window_relationship_without_children_overrides_stale_pane_list_mode() -
     window = compile_map(raw).windows[0]
     assert window.mode == "single_implicit_pane"
     assert [step.command for step in window.panes[0].steps] == ["echo okay"]
+
+
+def test_multiple_relationships_follow_own_command_then_children() -> None:
+    example_path = Path(__file__).parents[1] / "examples" / "multi-relationship-map.json"
+    raw = json.loads(example_path.read_text(encoding="utf-8"))
+
+    window = compile_map(raw).windows[0]
+    assert window.mode == "pane_list"
+    assert [pane.title for pane in window.panes] == ["second pane", "remote host"]
+    assert [[step.command for step in pane.steps] for pane in window.panes] == [
+        ["uptime", "hostname", "echo test"],
+        ["ssh hw0076", "uptime", "hostname", "pwd", "uptime"],
+    ]
+
+
+def test_each_relationship_uses_its_own_defaults_with_callsite_override() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                attributes={"window-mode": "single-pane"},
+                children=[
+                    node(
+                        "call",
+                        "echo own {{VALUE}}",
+                        relationships=["one", "two"],
+                        attributes={"VALUE": "caller"},
+                    )
+                ],
+            ),
+            node("one", "echo one {{VALUE}}", attributes={"VALUE": "first"}),
+            node("two", "echo two {{VALUE}}", attributes={"VALUE": "second"}),
+        ],
+    )
+
+    assert commands(compile_map(raw)) == [
+        "echo own caller",
+        "echo one caller",
+        "echo two caller",
+    ]

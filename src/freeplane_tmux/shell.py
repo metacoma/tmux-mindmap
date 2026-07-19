@@ -207,10 +207,7 @@ def _alias_sync(current: dict[str, str], target: dict[str, str]) -> list[str]:
 def _title_commands(title: str | None) -> list[str]:
     if not title:
         return []
-    return [
-        'tmux set-option -pt "$TMUX_PANE" allow-set-title on',
-        "printf '\\033]2;%s\\033\\\\' " + shlex.quote(title),
-    ]
+    return ["printf '\\033]2;%s\\033\\\\' " + shlex.quote(title)]
 
 
 def pane_shell_commands(pane: PaneSpec) -> list[str]:

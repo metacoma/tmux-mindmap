@@ -147,3 +147,88 @@ def test_non_shell_sudo_command_is_not_rewritten() -> None:
 
     pane = compile_map(raw).windows[0].panes[0]
     assert pane_shell_commands(pane)[-1] == "sudo apt-get update"
+
+
+def test_pane_title_uses_osc_without_allow_set_title() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                children=[
+                    node(
+                        "pane",
+                        "remote host",
+                        children=[node("command", "uptime")],
+                    )
+                ],
+            )
+        ],
+    )
+
+    emitted = pane_shell_commands(compile_map(raw).windows[0].panes[0])
+    assert emitted[0] == "printf '\\033]2;%s\\033\\\\' 'remote host'"
+    assert all("allow-set-title" not in command for command in emitted)
+
+
+def test_pane_name_builtin_is_available_across_pane_execution_path() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                attributes={"window-mode": "pane-list"},
+                children=[
+                    node(
+                        "pane",
+                        "remote host",
+                        children=[
+                            node(
+                                "command",
+                                "echo own {{ pane-name }}",
+                                relationships=["helper"],
+                                children=[node("tail", "echo child {{ pane-name }}")],
+                            )
+                        ],
+                    )
+                ],
+            ),
+            node("helper", "echo relationship {{ pane-name }}"),
+        ],
+    )
+
+    pane = compile_map(raw).windows[0].panes[0]
+    assert pane.base_scope.vars["pane-name"] == "remote host"
+    assert [step.command for step in pane.steps] == [
+        "echo own remote host",
+        "echo relationship remote host",
+        "echo child remote host",
+    ]
+    assert all(step.effective_scope.vars["pane-name"] == "remote host" for step in pane.steps)
+
+
+def test_pane_name_builtin_is_empty_for_unnamed_implicit_pane() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                attributes={"window-mode": "single-pane"},
+                children=[node("command", "printf '<%s>\\n' '{{ pane-name }}'")],
+            )
+        ],
+    )
+
+    pane = compile_map(raw).windows[0].panes[0]
+    assert pane.title is None
+    assert pane.base_scope.vars["pane-name"] == ""
+    assert [step.command for step in pane.steps] == ["printf '<%s>\\n' ''"]

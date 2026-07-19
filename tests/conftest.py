@@ -14,6 +14,7 @@ def node(
     detail: str | None = None,
     tags: list[str] | None = None,
     relationship: str | None = None,
+    relationships: list[str] | None = None,
     attributes: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
@@ -25,8 +26,12 @@ def node(
     }
     if detail is not None:
         result["detail"] = detail
+    if relationship is not None and relationships is not None:
+        raise ValueError("use either relationship or relationships")
     if relationship is not None:
         result["relationships"] = [{"target_id": relationship}]
+    elif relationships is not None:
+        result["relationships"] = [{"target_id": target_id} for target_id in relationships]
     return result
 
 
