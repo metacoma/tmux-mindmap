@@ -72,9 +72,11 @@ def test_run_tmuxp_converts_nonzero_system_exit(monkeypatch, tmp_path: Path) -> 
     monkeypatch.setattr("freeplane_tmux.runtime.shutil.which", lambda name: "/usr/bin/tmux")
     monkeypatch.setattr(
         "freeplane_tmux.runtime.subprocess.run",
-        lambda args, **kwargs: CompletedProcess(args, 1)
-        if args[:3] == ["tmux", "has-session", "-t"]
-        else (_ for _ in ()).throw(AssertionError(args)),
+        lambda args, **kwargs: (
+            CompletedProcess(args, 1)
+            if args[:3] == ["tmux", "has-session", "-t"]
+            else (_ for _ in ()).throw(AssertionError(args))
+        ),
     )
     _install_fake_tmuxp(monkeypatch, lambda args: sys.exit(7))
 
