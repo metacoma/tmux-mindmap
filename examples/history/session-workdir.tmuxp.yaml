@@ -2,6 +2,7 @@ session_name: workdir-demo
 start_directory: /tmp
 windows:
 - window_name: ops
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'

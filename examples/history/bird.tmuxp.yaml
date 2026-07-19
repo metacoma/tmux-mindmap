@@ -1,6 +1,7 @@
 session_name: tmux
 windows:
 - window_name: bird
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'

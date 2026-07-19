@@ -1,6 +1,7 @@
 session_name: playground
 windows:
 - window_name: kubernetes info
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -14,6 +15,7 @@ windows:
     - ssh hw0076
     - kubectl get events -W --all-namespaces
 - window_name: mcmp2
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
@@ -26,6 +28,7 @@ windows:
     - printf '\033]2;%s\033\\' pane2
     - ssh mcmp2
 - window_name: mcmp3
+  layout: main-horizontal
   options:
     pane-border-status: top
     pane-border-format: '#{pane_index}: #{pane_title}'
