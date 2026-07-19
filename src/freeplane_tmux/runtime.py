@@ -74,15 +74,13 @@ def _kill_existing_session(session_name: str) -> None:
             return
         if probe.returncode != 0:
             raise RuntimeError(
-                "tmux has-session failed for session "
-                f"{session_name!r} with exit code {probe.returncode}"
+                f"tmux has-session failed for session {session_name!r} with exit code {probe.returncode}"
             )
 
         kill = subprocess.run(["tmux", "kill-session", "-t", session_name], check=False)
         if kill.returncode != 0:
             raise RuntimeError(
-                "tmux kill-session failed for session "
-                f"{session_name!r} with exit code {kill.returncode}"
+                f"tmux kill-session failed for session {session_name!r} with exit code {kill.returncode}"
             )
 
 
