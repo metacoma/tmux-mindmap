@@ -44,6 +44,11 @@
       "name": "jinja-node-names",
       "map": "jinja-node-names.map.json",
       "tmuxp": "jinja-node-names.tmuxp.yaml"
+    },
+    {
+      "name": "mixed-window",
+      "map": "mixed-window.map.json",
+      "tmuxp": "mixed-window.tmuxp.yaml"
     }
   ]
 }

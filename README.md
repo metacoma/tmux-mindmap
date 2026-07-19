@@ -7,7 +7,7 @@ The project treats the mindmap as a small declarative execution language: `WINDO
 ## Features
 
 - Uses the **map root** as the tmux session root.
-- Supports automatic `single implicit pane` and `pane list` window modes.
+- Supports explicit `single implicit pane`, `pane list`, and ordered mixed-window plans.
 - Supports relationship calls to both leaf commands and composite function subtrees.
 - Resolves relationship targets in the call-site context.
 - Provides path-scoped template variables and environment inheritance.
@@ -178,12 +178,18 @@ Current CLI surface:
 
 The map root supplies `session_name`. The compiler finds top-level nodes tagged `WINDOW`; a nested `WINDOW` inside another window is not treated as a second session window.
 
-A window becomes one implicit pane when:
+A `WINDOW` body is parsed as an ordered sequence of command runs and pane declarations:
 
-- it has a `detail` or `relationship`, or
-- all executable children are plain leaf commands.
+- consecutive plain leaf children are commands in one unnamed implicit pane;
+- a child with children, `detail`, relationships, or a `PANE` tag declares a separate pane;
+- command runs and declared panes keep their order, so mixed windows are supported directly.
 
-Otherwise each executable child is a pane root. The behavior can be forced with a window attribute:
+This is a local node grammar rather than a global all-or-nothing window heuristic. The
+`COMMAND` tag forces an otherwise structured child into the current implicit command run;
+the `PANE` tag explicitly declares a pane, including an empty named pane. A node cannot carry
+both tags.
+
+The behavior can still be forced for the complete window with an attribute:
 
 ```text
 window-mode = single-pane
@@ -203,7 +209,7 @@ For a normal command node, execution order is deterministic:
 2. every relationship target in relationship-list order,
 3. children in tree order.
 
-Window and pane-root text remains structural: it names the window or pane and is not executed.
+Window text and declared pane-root text remain structural: they name the window or pane and are not executed. Plain leaf children assigned to an implicit command run execute their text.
 A root `detail` is still executable, and root relationships are expanded before root children.
 
 ### Relationships

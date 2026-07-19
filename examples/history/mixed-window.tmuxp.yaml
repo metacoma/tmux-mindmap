@@ -1,0 +1,13 @@
+session_name: playground
+windows:
+- window_name: hello-win
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - echo pwd
+    - echo uptime
+  - shell_command:
+    - printf '\033]2;%s\033\\' 'second pane'
+    - who

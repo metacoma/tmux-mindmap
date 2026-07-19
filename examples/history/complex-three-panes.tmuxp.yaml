@@ -6,7 +6,7 @@ windows:
     pane-border-format: '#{pane_index}: #{pane_title}'
   panes:
   - shell_command:
-    - bash
+    - echo 1
   - shell_command:
     - printf '\033]2;%s\033\\' remote
     - ssh remote host
@@ -14,4 +14,4 @@ windows:
     - echo 2
     - echo 3
   - shell_command:
-    - bash
+    - echo 3

@@ -58,3 +58,18 @@ def test_jinja_node_names_fixture_expands_window_and_pane_titles() -> None:
         "ssh mcmp3",
         "hostname",
     ]
+
+
+def test_mixed_window_fixture_has_two_panes_and_executes_both_echoes() -> None:
+    raw = json.loads((FIXTURE_DIR / "mixed-window.map.json").read_text(encoding="utf-8"))
+
+    session = MindmapCompiler(RawNode.model_validate(raw)).compile()
+    window = session.windows[0]
+
+    assert window.mode == "mixed"
+    assert len(window.panes) == 2
+    assert [pane.title for pane in window.panes] == [None, "second pane"]
+    assert [[step.command for step in pane.steps] for pane in window.panes] == [
+        ["echo pwd", "echo uptime"],
+        ["who"],
+    ]

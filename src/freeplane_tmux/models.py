@@ -93,7 +93,7 @@ class PaneSpec:
 class WindowSpec:
     window_id: str
     name: str
-    mode: Literal["single_implicit_pane", "pane_list"]
+    mode: Literal["single_implicit_pane", "pane_list", "mixed"]
     panes: tuple[PaneSpec, ...]
 
 

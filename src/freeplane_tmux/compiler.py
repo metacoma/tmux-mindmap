@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from .errors import SemanticError
 from .models import (
@@ -24,6 +24,27 @@ ALIAS_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 class _WindowLocation:
     node: RawNode
     path: tuple[RawNode, ...]
+
+
+@dataclass(frozen=True)
+class _ImplicitPanePlan:
+    command_nodes: tuple[RawNode, ...]
+    ordinal: int
+    expands_window_root: bool = False
+
+
+@dataclass(frozen=True)
+class _ExplicitPanePlan:
+    pane_root: RawNode
+
+
+_PanePlan: TypeAlias = _ImplicitPanePlan | _ExplicitPanePlan
+
+
+@dataclass(frozen=True)
+class _WindowPlan:
+    mode: Literal["single_implicit_pane", "pane_list", "mixed"]
+    panes: tuple[_PanePlan, ...]
 
 
 class MindmapCompiler:
@@ -212,39 +233,108 @@ class MindmapCompiler:
             )
         return commands
 
-    def _window_mode(self, window: RawNode) -> Literal["single_implicit_pane", "pane_list"]:
+    @staticmethod
+    def _window_child_role(node: RawNode) -> Literal["command", "pane"]:
+        """Classify one direct WINDOW child using the map grammar.
+
+        Direct WINDOW children are not interpreted through a global window heuristic.
+        Each child has one local role:
+
+        * a plain leaf is a command in an implicit pane;
+        * a branch, detailed invocation, relationship invocation, or PANE-tagged node
+          declares its own pane;
+        * COMMAND/PANE tags are explicit overrides for otherwise ambiguous nodes.
+        """
+
+        explicit_pane = "PANE" in node.tags
+        explicit_command = "COMMAND" in node.tags
+        if explicit_pane and explicit_command:
+            raise SemanticError(f"node {node.id!r} cannot have both PANE and COMMAND tags")
+        if explicit_pane:
+            return "pane"
+        if explicit_command:
+            return "command"
+        if node.children or (node.detail and node.detail.strip()) or node.relationships:
+            return "pane"
+        return "command"
+
+    def _plan_window(self, window: RawNode) -> _WindowPlan:
         attributes = {key: to_string(value) for key, value in window.attributes.items()}
         explicit = attributes.get("window-mode") or attributes.get("window_mode")
-        children = self._non_alias_children(window)
+        children = tuple(self._non_alias_children(window))
 
-        # A root invocation without pane children is always one implicit pane.
-        # This is a semantic guarantee, even if a stale pane-list override exists.
-        if (window.detail or window.relationships) and not children:
-            return "single_implicit_pane"
-        if explicit in {"single-pane", "single_implicit_pane"}:
-            return "single_implicit_pane"
-        if explicit in {"pane-list", "pane_list"}:
-            if window.detail or window.relationships:
+        # A command attached to the WINDOW node owns one implicit pane and expands
+        # its descendants in that same execution context.
+        if window.detail or window.relationships:
+            if explicit in {"pane-list", "pane_list"} and children:
                 raise SemanticError(
                     f"window {window.id!r} combines a root command/relationship with "
                     "explicit pane-list mode; use single-pane or move the command into a pane"
                 )
-            return "pane_list"
+            return _WindowPlan(
+                mode="single_implicit_pane",
+                panes=(
+                    _ImplicitPanePlan(
+                        command_nodes=(),
+                        ordinal=0,
+                        expands_window_root=True,
+                    ),
+                ),
+            )
 
-        if window.detail or window.relationships:
-            return "single_implicit_pane"
-        if not children:
-            return "pane_list"
+        if explicit in {"single-pane", "single_implicit_pane"}:
+            return _WindowPlan(
+                mode="single_implicit_pane",
+                panes=(_ImplicitPanePlan(command_nodes=children, ordinal=0),),
+            )
 
-        all_plain_commands = all(
-            not child.children
-            and not child.detail
-            and not child.relationships
-            and not child.attributes
-            and "WINDOW" not in child.tags
-            for child in children
-        )
-        return "single_implicit_pane" if all_plain_commands else "pane_list"
+        if explicit in {"pane-list", "pane_list"}:
+            return _WindowPlan(
+                mode="pane_list",
+                panes=tuple(_ExplicitPanePlan(child) for child in children),
+            )
+
+        if explicit:
+            raise SemanticError(f"unsupported window mode {explicit!r} in window {window.id!r}")
+
+        # Default WINDOW grammar is a sequence. Consecutive command entries share
+        # one implicit pane; pane declarations retain their position. This preserves
+        # source order and supports mixed windows without switching the entire window
+        # between two inferred modes.
+        panes: list[_PanePlan] = []
+        pending_commands: list[RawNode] = []
+        implicit_ordinal = 0
+
+        def flush_commands() -> None:
+            nonlocal implicit_ordinal
+            if not pending_commands:
+                return
+            panes.append(
+                _ImplicitPanePlan(
+                    command_nodes=tuple(pending_commands),
+                    ordinal=implicit_ordinal,
+                )
+            )
+            implicit_ordinal += 1
+            pending_commands.clear()
+
+        for child in children:
+            if self._window_child_role(child) == "command":
+                pending_commands.append(child)
+                continue
+            flush_commands()
+            panes.append(_ExplicitPanePlan(child))
+        flush_commands()
+
+        if not panes:
+            return _WindowPlan(mode="pane_list", panes=())
+        if len(panes) == 1 and isinstance(panes[0], _ImplicitPanePlan):
+            mode: Literal["single_implicit_pane", "pane_list", "mixed"] = "single_implicit_pane"
+        elif all(isinstance(pane, _ExplicitPanePlan) for pane in panes):
+            mode = "pane_list"
+        else:
+            mode = "mixed"
+        return _WindowPlan(mode=mode, panes=tuple(panes))
 
     def _compile_window(
         self,
@@ -262,34 +352,37 @@ class MindmapCompiler:
             subject=f"window name from node {window.id!r}",
             default="window",
         )
-        mode = self._window_mode(window)
-
-        if mode == "single_implicit_pane":
-            panes = (
-                self._compile_implicit_pane(
-                    window,
-                    ancestor_layers,
-                    session_name,
-                    window_name,
-                ),
-            )
-        else:
-            panes = tuple(
-                self._compile_pane_root(
-                    window,
-                    pane_root,
-                    window_layers,
-                    session_name,
-                    window_name,
+        plan = self._plan_window(window)
+        compiled_panes: list[PaneSpec] = []
+        for pane_plan in plan.panes:
+            if isinstance(pane_plan, _ImplicitPanePlan):
+                compiled_panes.append(
+                    self._compile_implicit_pane(
+                        window,
+                        ancestor_layers,
+                        session_name,
+                        window_name,
+                        command_nodes=pane_plan.command_nodes,
+                        ordinal=pane_plan.ordinal,
+                        expands_window_root=pane_plan.expands_window_root,
+                    )
                 )
-                for pane_root in self._non_alias_children(window)
-            )
+            else:
+                compiled_panes.append(
+                    self._compile_pane_root(
+                        window,
+                        pane_plan.pane_root,
+                        window_layers,
+                        session_name,
+                        window_name,
+                    )
+                )
 
         return WindowSpec(
             window_id=window.id,
             name=window_name,
-            mode=mode,
-            panes=panes,
+            mode=plan.mode,
+            panes=tuple(compiled_panes),
         )
 
     def _builtins(
@@ -337,6 +430,10 @@ class MindmapCompiler:
         ancestor_layers: tuple[ScopeLayer, ...],
         session_name: str,
         window_name: str,
+        *,
+        command_nodes: tuple[RawNode, ...],
+        ordinal: int,
+        expands_window_root: bool,
     ) -> PaneSpec:
         effective_layers = self._layers_for_node(
             ancestor_layers,
@@ -355,7 +452,7 @@ class MindmapCompiler:
             subject=f"implicit pane for window {window.text!r}",
         )
 
-        if window.detail or window.relationships:
+        if expands_window_root:
             steps = self._expand_node(
                 window,
                 inherited_layers=ancestor_layers,
@@ -368,7 +465,7 @@ class MindmapCompiler:
         else:
             window_layers = (*ancestor_layers, self._node_layer(window))
             expanded: list[CommandStep] = []
-            for child in self._non_alias_children(window):
+            for child in command_nodes:
                 expanded.extend(
                     self._expand_node(
                         child,
@@ -382,7 +479,7 @@ class MindmapCompiler:
             steps = expanded
 
         return PaneSpec(
-            pane_id=f"{window.id}::__implicit__",
+            pane_id=f"{window.id}::__implicit__:{ordinal}",
             title=None,
             base_scope=base_scope,
             steps=tuple(steps),
@@ -398,7 +495,9 @@ class MindmapCompiler:
     ) -> PaneSpec:
         children = self._non_alias_children(pane_root)
         structural_root = bool(children and not pane_root.detail and not pane_root.relationships)
-        has_named_pane = bool(children or pane_root.detail or pane_root.relationships)
+        has_named_pane = bool(
+            children or pane_root.detail or pane_root.relationships or "PANE" in pane_root.tags
+        )
 
         base_layers = self._layers_for_node(
             window_layers,
