@@ -297,7 +297,7 @@ Canonical maps recovered from the project history live in `examples/history/` as
 <name>.tmuxp.yaml
 ```
 
-`tests/test_history_fixtures.py` recompiles every map and compares the complete tmuxp structure and command lists with the committed YAML. `tests/test_tmuxp_integration.py` then invokes real `tmuxp load -d` and inspects tmux to verify window names, pane counts, and rendered pane titles. The live test preserves only the generated OSC title command and replaces executable payloads with `sleep`, so historical SSH, sudo, ping, editor, and monitoring commands are never run by CI.
+`tests/test_history_fixtures.py` recompiles every map and compares the complete tmuxp structure and command lists with the committed YAML. `tests/test_tmuxp_integration.py` then invokes real `tmuxp load -d` and inspects tmux to verify window names, pane counts, and rendered pane titles. The live test combines the generated OSC title update and a harmless `exec sleep` into one shell command, preventing the next interactive prompt from overwriting the title with the hostname. Historical SSH, sudo, ping, editor, and monitoring commands are never run by CI.
 
 Run only the real integration suite with:
 

@@ -6,6 +6,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +47,13 @@ def _runtime_safe_config(expected: dict[str, Any], session_name: str) -> dict[st
                 for command in pane["shell_command"]
                 if command.startswith("printf '\\033]2;%s\\033\\\\' ")
             ]
-            pane["shell_command"] = [*title_commands[:1], "exec sleep 60"]
+            hold_command = "exec sleep 60"
+            if title_commands:
+                # Keep the title update and the hold process in one shell command.
+                # A prompt rendered between separate commands may emit its own OSC
+                # title and overwrite the generated pane name with the hostname.
+                hold_command = f"{title_commands[0]}; {hold_command}"
+            pane["shell_command"] = [hold_command]
             pane.pop("environment", None)
 
     return config
@@ -75,6 +82,61 @@ def _run(command: list[str], *, env: dict[str, str], check: bool = True) -> str:
             f"stderr:\n{completed.stderr}"
         )
     return completed.stdout
+
+
+def _read_pane_titles(
+    tmux: str,
+    session_name: str,
+    *,
+    env: dict[str, str],
+) -> dict[str, list[tuple[int, str]]]:
+    output = _run(
+        [
+            tmux,
+            "list-panes",
+            "-s",
+            "-t",
+            session_name,
+            "-F",
+            "#{window_index}\t#{pane_index}\t#{pane_title}",
+        ],
+        env=env,
+    )
+    titles: dict[str, list[tuple[int, str]]] = {}
+    for window_index, pane_index, pane_title in (
+        line.split("\t", 2) for line in output.splitlines()
+    ):
+        titles.setdefault(window_index, []).append((int(pane_index), pane_title))
+    return titles
+
+
+def _wait_for_expected_titles(
+    tmux: str,
+    session_name: str,
+    expected_titles: dict[str, list[str | None]],
+    *,
+    env: dict[str, str],
+) -> dict[str, list[tuple[int, str]]]:
+    deadline = time.monotonic() + 5
+    actual: dict[str, list[tuple[int, str]]] = {}
+    while time.monotonic() < deadline:
+        actual = _read_pane_titles(tmux, session_name, env=env)
+        matches = True
+        for window_index, wanted in expected_titles.items():
+            ordered = [title for _, title in sorted(actual.get(window_index, []))]
+            if len(ordered) != len(wanted):
+                matches = False
+                break
+            if any(
+                expected is not None and current != expected
+                for current, expected in zip(ordered, wanted, strict=True)
+            ):
+                matches = False
+                break
+        if matches:
+            return actual
+        time.sleep(0.05)
+    return actual
 
 
 @pytest.mark.parametrize("case", _cases(), ids=lambda case: case["name"])
@@ -127,33 +189,25 @@ def test_tmuxp_load_creates_expected_window_and_pane_structure(
             expected_structure
         )
 
-        pane_output = _run(
-            [
-                tmux,
-                "list-panes",
-                "-s",
-                "-t",
-                session_name,
-                "-F",
-                "#{window_index}\t#{pane_index}\t#{pane_title}",
-            ],
+        expected_titles_by_window = {
+            window_index: [_expected_pane_title(pane) for pane in expected_window["panes"]]
+            for (window_index, _, _), expected_window in zip(
+                actual_windows,
+                expected["windows"],
+                strict=True,
+            )
+        }
+        actual_titles = _wait_for_expected_titles(
+            tmux,
+            session_name,
+            expected_titles_by_window,
             env=env,
         )
-        actual_titles: dict[str, list[tuple[int, str]]] = {}
-        for window_index, pane_index, pane_title in (
-            line.split("\t", 2) for line in pane_output.splitlines()
-        ):
-            actual_titles.setdefault(window_index, []).append((int(pane_index), pane_title))
 
-        for (window_index, _, _), expected_window in zip(
-            actual_windows,
-            expected["windows"],
-            strict=True,
-        ):
+        for window_index, expected_titles in expected_titles_by_window.items():
             ordered_actual = [
                 title for _, title in sorted(actual_titles[window_index], key=lambda item: item[0])
             ]
-            expected_titles = [_expected_pane_title(pane) for pane in expected_window["panes"]]
             for actual_title, expected_title in zip(
                 ordered_actual,
                 expected_titles,
@@ -163,3 +217,28 @@ def test_tmuxp_load_creates_expected_window_and_pane_structure(
                     assert actual_title == expected_title
     finally:
         _run([tmux, "kill-server"], env=env, check=False)
+
+
+def test_runtime_safe_config_keeps_title_and_hold_in_one_command() -> None:
+    expected = {
+        "session_name": "demo",
+        "windows": [
+            {
+                "window_name": "ops",
+                "panes": [
+                    {
+                        "shell_command": [
+                            "printf '\\033]2;%s\\033\\\\' 'remote host'",
+                            "ssh remote",
+                        ]
+                    }
+                ],
+            }
+        ],
+    }
+
+    runtime = _runtime_safe_config(expected, "runtime")
+
+    assert runtime["windows"][0]["panes"][0]["shell_command"] == [
+        "printf '\\033]2;%s\\033\\\\' 'remote host'; exec sleep 60"
+    ]
