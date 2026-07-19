@@ -8,4 +8,3 @@ build/
 dist/
 *.map.json
 *.tmuxp.yaml
-*.log
