@@ -243,7 +243,10 @@ class ScopeResolver:
         rendered = render_template(template, scope.lookup, stringify=stringify_template_value)
         return require_resolved(rendered, subject=subject)
 
-    def render_command(self, template: str, scope: ScopeSnapshot, *, subject: str) -> list[str]:
+    def render_command_block(self, template: str, scope: ScopeSnapshot, *, subject: str) -> str:
         rendered = render_template(template, scope.lookup, stringify=stringify_shell_value)
-        rendered = require_resolved(rendered, subject=subject)
+        return require_resolved(rendered, subject=subject)
+
+    def render_command(self, template: str, scope: ScopeSnapshot, *, subject: str) -> list[str]:
+        rendered = self.render_command_block(template, scope, subject=subject)
         return split_shell_commands(rendered)

@@ -665,6 +665,33 @@ def test_root_detail_list_lookup_renders_as_shell_safe_words() -> None:
     ]
 
 
+def test_root_detail_list_lookup_preserves_multiline_shell_block() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node("public-ips", "public_ips", detail="8.8.8.8 1.1.1.1 4.4.4.4"),
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                children=[
+                    node(
+                        "cmd",
+                        "show public ips",
+                        detail='for i in {{ root.public_ips }}\ndo\n  printf "%s\\n" "$i"\ndone',
+                    )
+                ],
+            ),
+        ],
+    )
+
+    pane = compile_map(raw).windows[0].panes[0]
+    assert [step.command for step in pane.steps] == [
+        'for i in 8.8.8.8 1.1.1.1 4.4.4.4\ndo\n  printf "%s\\n" "$i"\ndone'
+    ]
+
+
 def test_root_lookup_works_inside_relationship_helper_commands() -> None:
     raw = node(
         "root",

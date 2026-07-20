@@ -931,6 +931,22 @@ class MindmapCompiler:
         payload_source: Literal["text", "detail", "relationship"],
         scope: ScopeSnapshot,
     ) -> list[CommandStep]:
+        if "\n" in template:
+            command = self._resolver.render_command_block(
+                template,
+                scope,
+                subject=f"command in node {node.id!r}",
+            )
+            return [
+                CommandStep(
+                    node_id=node.id,
+                    display_name=scope.vars.get("node-name", node.text),
+                    payload_source=payload_source,
+                    command=command,
+                    effective_scope=scope,
+                )
+            ]
+
         commands = self._resolver.render_command(
             template,
             scope,
