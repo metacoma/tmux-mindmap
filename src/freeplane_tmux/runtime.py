@@ -63,9 +63,10 @@ def _session_name_from_workspace(path: Path) -> str:
 
 
 def _kill_existing_session(session_name: str) -> None:
+    target = f"={session_name}"
     with _outside_tmux_environment():
         probe = subprocess.run(
-            ["tmux", "has-session", "-t", session_name],
+            ["tmux", "has-session", "-t", target],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
@@ -78,12 +79,27 @@ def _kill_existing_session(session_name: str) -> None:
                 f"{session_name!r} with exit code {probe.returncode}"
             )
 
-        kill = subprocess.run(["tmux", "kill-session", "-t", session_name], check=False)
+        kill = subprocess.run(["tmux", "kill-session", "-t", target], check=False)
         if kill.returncode != 0:
             raise RuntimeError(
                 "tmux kill-session failed for session "
                 f"{session_name!r} with exit code {kill.returncode}"
             )
+
+        verify = subprocess.run(
+            ["tmux", "has-session", "-t", target],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if verify.returncode == 1:
+            return
+        if verify.returncode != 0:
+            raise RuntimeError(
+                "tmux post-kill has-session failed for session "
+                f"{session_name!r} with exit code {verify.returncode}"
+            )
+        raise RuntimeError(f"tmux session {session_name!r} still exists after kill-session")
 
 
 def run_tmuxp(path: Path, *, detached: bool) -> None:

@@ -37,7 +37,8 @@ def test_run_tmuxp_uses_bundled_cli_and_replaces_existing_session(
     def fake_run(args: list[str], **kwargs):
         tmux_calls.append((args, os.environ.get("TMUX"), os.environ.get("TMUX_PANE")))
         if args[:3] == ["tmux", "has-session", "-t"]:
-            return CompletedProcess(args, 0)
+            count = sum(1 for call, *_ in tmux_calls if call[:3] == ["tmux", "has-session", "-t"])
+            return CompletedProcess(args, 0 if count == 1 else 1)
         if args[:3] == ["tmux", "kill-session", "-t"]:
             return CompletedProcess(args, 0)
         raise AssertionError(args)
@@ -53,8 +54,9 @@ def test_run_tmuxp_uses_bundled_cli_and_replaces_existing_session(
     run_tmuxp(config, detached=True)
 
     assert tmux_calls == [
-        (["tmux", "has-session", "-t", "demo"], None, None),
-        (["tmux", "kill-session", "-t", "demo"], None, None),
+        (["tmux", "has-session", "-t", "=demo"], None, None),
+        (["tmux", "kill-session", "-t", "=demo"], None, None),
+        (["tmux", "has-session", "-t", "=demo"], None, None),
     ]
     assert calls == [(["load", "-d", str(config)], None, None)]
     assert os.environ["TMUX"] == "outer"
@@ -119,7 +121,7 @@ def test_run_tmuxp_skips_kill_when_session_does_not_exist(monkeypatch, tmp_path:
 
     run_tmuxp(config, detached=False)
 
-    assert tmux_calls == [["tmux", "has-session", "-t", "demo"]]
+    assert tmux_calls == [["tmux", "has-session", "-t", "=demo"]]
 
 
 def test_run_tmuxp_rejects_workspace_without_session_name(monkeypatch, tmp_path: Path) -> None:
@@ -150,3 +152,46 @@ def test_run_tmuxp_fails_when_kill_session_fails(monkeypatch, tmp_path: Path) ->
 
     with pytest.raises(RuntimeError, match="kill-session failed"):
         run_tmuxp(config, detached=False)
+
+
+def test_run_tmuxp_fails_when_session_still_exists_after_kill(monkeypatch, tmp_path: Path) -> None:
+    def fake_run(args: list[str], **kwargs):
+        if args[:3] == ["tmux", "has-session", "-t"]:
+            return CompletedProcess(args, 0)
+        if args[:3] == ["tmux", "kill-session", "-t"]:
+            return CompletedProcess(args, 0)
+        raise AssertionError(args)
+
+    monkeypatch.setattr("freeplane_tmux.runtime.shutil.which", lambda name: "/usr/bin/tmux")
+    monkeypatch.setattr("freeplane_tmux.runtime.subprocess.run", fake_run)
+    _install_fake_tmuxp(monkeypatch, lambda args: None)
+
+    config = tmp_path / "session.yaml"
+    _write_workspace(config, session_name="kubernetes cluster")
+
+    with pytest.raises(RuntimeError, match="still exists after kill-session"):
+        run_tmuxp(config, detached=False)
+
+
+def test_run_tmuxp_uses_exact_target_for_session_names_with_spaces(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    tmux_calls: list[list[str]] = []
+
+    def fake_run(args: list[str], **kwargs):
+        tmux_calls.append(args)
+        if args[:3] == ["tmux", "has-session", "-t"]:
+            return CompletedProcess(args, 1)
+        raise AssertionError(args)
+
+    monkeypatch.setattr("freeplane_tmux.runtime.shutil.which", lambda name: "/usr/bin/tmux")
+    monkeypatch.setattr("freeplane_tmux.runtime.subprocess.run", fake_run)
+    _install_fake_tmuxp(monkeypatch, lambda args: None)
+
+    config = tmp_path / "session.yaml"
+    _write_workspace(config, session_name="kubernetes cluster")
+
+    run_tmuxp(config, detached=False)
+
+    assert tmux_calls == [["tmux", "has-session", "-t", "=kubernetes cluster"]]
