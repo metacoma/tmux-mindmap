@@ -1,0 +1,11 @@
+session_name: root-lookup-demo
+windows:
+- window_name: ops
+  layout: main-horizontal
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - for i in 10.20.0.3 10.20.0.4 10.20.0.5; do echo "$i"; done
+    - for i in 8.8.8.8 '1.1.1.1 two'; do printf '<%s>\n' "$i"; done

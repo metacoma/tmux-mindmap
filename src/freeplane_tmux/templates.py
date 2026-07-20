@@ -1,15 +1,46 @@
 from __future__ import annotations
 
 import re
+import shlex
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import TypeAlias
 
 from .errors import SemanticError
 
 TEMPLATE_RE = re.compile(r"{{\s*([^{}]+?)\s*}}")
-Lookup = Callable[[str], str | None]
 
 
-def render_template(value: str, lookup: Lookup, *, max_passes: int = 64) -> str:
+@dataclass(frozen=True)
+class ShellList:
+    items: tuple[str, ...]
+    text: str | None = None
+
+
+TemplateValue: TypeAlias = str | ShellList
+Lookup = Callable[[str], TemplateValue | None]
+TemplateFormatter = Callable[[TemplateValue], str]
+
+
+def stringify_template_value(value: TemplateValue) -> str:
+    if isinstance(value, ShellList):
+        return value.text if value.text is not None else " ".join(value.items)
+    return str(value)
+
+
+def shellify_template_value(value: TemplateValue) -> str:
+    if isinstance(value, ShellList):
+        return " ".join(shlex.quote(item) for item in value.items)
+    return str(value)
+
+
+def render_template(
+    value: str,
+    lookup: Lookup,
+    *,
+    formatter: TemplateFormatter = stringify_template_value,
+    max_passes: int = 64,
+) -> str:
     rendered = value
     for _ in range(max_passes):
         changed = False
@@ -20,10 +51,10 @@ def render_template(value: str, lookup: Lookup, *, max_passes: int = 64) -> str:
             replacement = lookup(key)
             if replacement is None:
                 return match.group(0)
-            replacement = str(replacement)
-            if replacement != match.group(0):
+            rendered_value = formatter(replacement)
+            if rendered_value != match.group(0):
                 changed = True
-            return replacement
+            return rendered_value
 
         rendered = TEMPLATE_RE.sub(replace, rendered)
         if not changed:

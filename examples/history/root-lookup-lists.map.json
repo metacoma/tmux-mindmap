@@ -1,0 +1,42 @@
+{
+  "text": "root-lookup-demo",
+  "id": "root",
+  "children": [
+    {
+      "text": "inventory",
+      "id": "inventory",
+      "children": [
+        {
+          "text": "ips",
+          "id": "ips",
+          "children": [
+            {"text": "10.20.0.3", "id": "ip-1"},
+            {"text": "10.20.0.4", "id": "ip-2"},
+            {"text": "10.20.0.5", "id": "ip-3"}
+          ]
+        },
+        {
+          "text": "public_ips",
+          "id": "public-ips",
+          "detail": "8.8.8.8 \"1.1.1.1 two\""
+        }
+      ]
+    },
+    {
+      "text": "ops",
+      "id": "window",
+      "tags": ["WINDOW"],
+      "attributes": {"window-mode": "single-pane"},
+      "children": [
+        {
+          "text": "for i in {{ root.inventory.ips }}; do echo \"$i\"; done",
+          "id": "show-private"
+        },
+        {
+          "text": "for i in {{ root.inventory.public_ips }}; do printf '<%s>\\n' \"$i\"; done",
+          "id": "show-public"
+        }
+      ]
+    }
+  ]
+}

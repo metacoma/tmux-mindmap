@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+from .templates import TemplateValue
 
 RawValidationError = ValidationError
 
@@ -63,8 +66,13 @@ class ScopeSnapshot:
     env: dict[str, str] = field(default_factory=dict)
     pre: tuple[str, ...] = ()
     aliases: dict[str, str] = field(default_factory=dict)
+    root_lookup: Callable[[str], TemplateValue | None] | None = None
 
-    def lookup(self, key: str) -> str | None:
+    def lookup(self, key: str) -> TemplateValue | None:
+        if self.root_lookup is not None:
+            root_value = self.root_lookup(key)
+            if root_value is not None:
+                return root_value
         if key in self.vars:
             return self.vars[key]
         if key in self.env:

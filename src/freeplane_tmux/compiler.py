@@ -239,6 +239,7 @@ class MindmapCompiler:
             ),
             strict=strict,
             subject=subject,
+            root_node=self.root,
         )
 
     def _render_node_text(
