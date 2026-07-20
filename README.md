@@ -15,7 +15,8 @@ The project treats the mindmap as a small declarative execution language: `WINDO
 - Accumulates `pre` commands instead of overwriting them.
 - Supports scoped `ALIAS` declarations with late template resolution.
 - Rebuilds environment and aliases when an interactive command changes shell context through `ssh` or `sudo`.
-- Sanitizes Freeplane `detailsText` HTML through one centralized parser.
+- Fetches Freeplane details through its canonical plain-text API, with centralized fallback
+  sanitation for local and legacy exports.
 
 ## Requirements
 
@@ -156,6 +157,18 @@ freeplane-tmux \
   --yaml-out /tmp/demo.tmuxp.yaml
 ```
 
+Dump the complete live map to stdout without compiling or writing files:
+
+```bash
+freeplane-tmux --dump --pretty
+```
+
+Dump the currently selected node and its complete descendant subtree as a standalone JSON root:
+
+```bash
+freeplane-tmux --dump-from-node --pretty
+```
+
 Current CLI surface:
 
 ```text
@@ -170,6 +183,8 @@ Current CLI surface:
 --detached
 --no-groovy-details
 --map-json
+--dump
+--dump-from-node
 --pretty
 ```
 
@@ -274,9 +289,13 @@ A child tagged `ALIAS` is a declaration, not an executable command.
 
 When `ssh host` or a `sudo ...` command opens a new interactive shell context, the compiler injects a temporary Bash rcfile containing the effective environment and aliases. Subsequent tmuxp commands therefore continue in the changed context with the same shell declarations.
 
-### Freeplane detailsText
+### Freeplane details
 
-When Groovy lookup is enabled, `detailsText` is fetched for all nodes. HTML tags and entities are normalized centrally before command splitting, preventing closing tags such as `</p>`, `</body>`, or `</html>` from leaking into shell commands.
+When Groovy lookup is enabled, details are fetched for all nodes through Freeplane's official
+`node.details.plain` conversion rather than the raw editor HTML returned by `detailsText`. This
+prevents editor indentation and formatting-only line breaks from being injected into shell
+commands or scalar `root...` template values. Existing plain-text sanitation remains the single
+fallback path for local and legacy exports.
 
 Use `--no-groovy-details` to rely only on the normal JSON export.
 
@@ -288,7 +307,7 @@ src/freeplane_tmux/
 ├── grpc_client.py  # Freeplane RPC transport
 ├── groovy.py       # root script1 and starter-map Groovy generation
 ├── models.py       # raw Freeplane model and normalized execution-plan types
-├── text.py         # detailsText sanitation and command splitting
+├── text.py         # details fallback sanitation and command splitting
 ├── templates.py    # template rendering and unresolved-key validation
 ├── scope.py        # vars/env/pre/ALIAS inheritance and late resolution
 ├── compiler.py     # semantic normalization into SessionSpec
@@ -344,4 +363,4 @@ MIT
 
 ## Bundled gRPC stubs
 
-`freeplane_pb2.py` and `freeplane_pb2_grpc.py` are bundled into the wheel and onefile binary, so runtime access to `metacoma/freeplane_plugin_grpc/grpc/python` is no longer required. The bundled stubs are derived from the upstream `freeplane.proto` definitions and cover the RPCs used by this project (`Groovy` and `MindMapToJSON`).
+`freeplane_pb2.py` and `freeplane_pb2_grpc.py` are bundled into the wheel and onefile binary, so runtime access to `metacoma/freeplane_plugin_grpc/grpc/python` is no longer required. The bundled stubs are derived from the upstream `freeplane.proto` definitions and cover the RPCs used by this project (`Groovy`, `MindMapToJSON`, and `GetCurrentNode`).

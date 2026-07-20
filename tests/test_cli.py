@@ -222,3 +222,91 @@ def test_load_compiles_emits_and_runs_tmuxp(monkeypatch, tmp_path: Path, capsys)
     assert "echo hello world" in yaml_path.read_text(encoding="utf-8")
     assert calls == [(yaml_path, True)]
     assert capsys.readouterr().out == f"{yaml_path}\n"
+
+
+def test_dump_arguments_are_accepted() -> None:
+    args = build_parser().parse_args(["--dump", "--pretty"])
+    assert args.dump is True
+    assert args.dump_from_node is False
+    assert args.pretty is True
+
+    args = build_parser().parse_args(["--dump-from-node"])
+    assert args.dump is False
+    assert args.dump_from_node is True
+
+
+def test_dump_prints_local_map_without_compiling(tmp_path: Path, capsys) -> None:
+    from freeplane_tmux.cli import main
+
+    raw_map = {
+        "id": "root",
+        "text": "debug-map",
+        "children": [{"id": "child", "text": "child", "children": []}],
+    }
+    map_path = tmp_path / "map.json"
+    map_path.write_text(json.dumps(raw_map), encoding="utf-8")
+
+    result = main(["--map-json", str(map_path), "--dump", "--pretty"])
+
+    assert result == 0
+    assert json.loads(capsys.readouterr().out) == raw_map
+    assert not (tmp_path / "debug-map.map.json").exists()
+    assert not (tmp_path / "debug-map.tmuxp.yaml").exists()
+
+
+def test_dump_from_node_prints_selected_subtree(monkeypatch, capsys) -> None:
+    from freeplane_tmux.cli import main
+
+    raw_map = {
+        "id": "root",
+        "text": "debug-map",
+        "children": [
+            {
+                "id": "selected",
+                "text": "selected",
+                "children": [{"id": "leaf", "text": "leaf", "children": []}],
+            },
+            {"id": "other", "text": "other", "children": []},
+        ],
+    }
+    calls: list[tuple[str, float]] = []
+    monkeypatch.setattr(
+        "freeplane_tmux.cli.fetch_current_node_id",
+        lambda *, address, timeout: calls.append((address, timeout)) or "selected",
+    )
+    monkeypatch.setattr("freeplane_tmux.cli.fetch_live_map", lambda **kwargs: raw_map)
+
+    result = main(
+        [
+            "--addr",
+            "freeplane.example:50052",
+            "--timeout",
+            "3.5",
+            "--dump-from-node",
+        ]
+    )
+
+    assert result == 0
+    assert calls == [("freeplane.example:50052", 3.5)]
+    assert json.loads(capsys.readouterr().out) == raw_map["children"][0]
+
+
+def test_dump_from_node_rejects_local_map(capsys) -> None:
+    from freeplane_tmux.cli import main
+
+    result = main(["--map-json", "map.json", "--dump-from-node"])
+
+    assert result == 4
+    assert "requires a live Freeplane connection" in capsys.readouterr().err
+
+
+def test_dump_mode_rejects_file_and_load_options(capsys) -> None:
+    from freeplane_tmux.cli import main
+
+    result = main(["--dump", "--json-out", "map.json", "--load"])
+
+    assert result == 4
+    error = capsys.readouterr().err
+    assert "dump mode cannot be combined with" in error
+    assert "--json-out" in error
+    assert "--load" in error

@@ -61,7 +61,10 @@ ids.each {{ id ->
     try {{
         def node = N(id)
         if (node != null) {{
-            def details = node.detailsText
+            // Freeplane's detailsText is raw editor HTML and may contain formatting
+            // indentation that is not part of the visible command. The scripting API's
+            // Convertible plain value is the canonical plain-text representation.
+            def details = node.details?.plain
             if (details != null && details.toString() != "") {{
                 out[id] = details.toString()
             }}
@@ -177,6 +180,34 @@ def fetch_live_map(
                 if isinstance(details, dict):
                     _apply_details(parsed, details)
         return parsed
+    except grpc.FutureTimeoutError as exc:
+        raise GrpcClientError(
+            f"Freeplane gRPC server at {address} did not become ready within {timeout:g}s"
+        ) from exc
+    finally:
+        channel.close()
+
+
+def fetch_current_node_id(*, address: str, timeout: float) -> str:
+    """Return the id of the node currently selected in Freeplane."""
+
+    try:
+        import grpc
+    except ImportError as exc:
+        raise GrpcClientError("grpcio is required for live Freeplane operations") from exc
+
+    pb2, pb2_grpc = _load_stubs()
+    channel = grpc.insecure_channel(address)
+    try:
+        grpc.channel_ready_future(channel).result(timeout=timeout)
+        stub = pb2_grpc.FreeplaneStub(channel)
+        response = stub.GetCurrentNode(pb2.GetCurrentNodeRequest(), timeout=timeout)
+        if hasattr(response, "success") and not response.success:
+            raise GrpcClientError("GetCurrentNode returned success=false")
+        node_id = str(getattr(response, "node_id", "") or "").strip()
+        if not node_id:
+            raise GrpcClientError("GetCurrentNode returned an empty node id")
+        return node_id
     except grpc.FutureTimeoutError as exc:
         raise GrpcClientError(
             f"Freeplane gRPC server at {address} did not become ready within {timeout:g}s"

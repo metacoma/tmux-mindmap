@@ -147,3 +147,21 @@ def test_load_stubs_returns_bundled_modules() -> None:
 
     assert pb2.GroovyRequest(groovy_code="x").groovy_code == "x"
     assert hasattr(pb2_grpc.FreeplaneStub, "__init__")
+
+
+def test_details_groovy_uses_freeplane_plain_text_api() -> None:
+    from freeplane_tmux.grpc_client import _details_groovy
+
+    source = _details_groovy(["node-1"])
+
+    assert "node.details?.plain" in source
+    assert "node.detailsText" not in source
+
+
+def test_bundled_stubs_cover_current_node_rpc() -> None:
+    from freeplane_tmux.grpc_client import _load_stubs
+
+    pb2, pb2_grpc = _load_stubs()
+
+    assert pb2.GetCurrentNodeRequest().SerializeToString() == b""
+    assert hasattr(pb2_grpc.FreeplaneStub, "__init__")

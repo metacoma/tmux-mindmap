@@ -52,6 +52,15 @@ _add_message(
         ("json", 2, _descriptor_pb2.FieldDescriptorProto.TYPE_STRING),
     ],
 )
+_add_message("GetCurrentNodeRequest", [])
+_add_message(
+    "GetCurrentNodeResponse",
+    [
+        ("map_id", 1, _descriptor_pb2.FieldDescriptorProto.TYPE_STRING),
+        ("node_id", 2, _descriptor_pb2.FieldDescriptorProto.TYPE_STRING),
+        ("success", 3, _descriptor_pb2.FieldDescriptorProto.TYPE_BOOL),
+    ],
+)
 
 service = fdp.service.add()
 service.name = "Freeplane"
@@ -61,6 +70,11 @@ for method_name, input_type, output_type in (
         "MindMapToJSON",
         ".freeplane.MindMapToJSONRequest",
         ".freeplane.MindMapToJSONResponse",
+    ),
+    (
+        "GetCurrentNode",
+        ".freeplane.GetCurrentNodeRequest",
+        ".freeplane.GetCurrentNodeResponse",
     ),
 ):
     method = service.method.add()
@@ -81,16 +95,26 @@ MindMapToJSONRequest = _message_factory.GetMessageClass(
 MindMapToJSONResponse = _message_factory.GetMessageClass(
     DESCRIPTOR.message_types_by_name["MindMapToJSONResponse"]
 )
+GetCurrentNodeRequest = _message_factory.GetMessageClass(
+    DESCRIPTOR.message_types_by_name["GetCurrentNodeRequest"]
+)
+GetCurrentNodeResponse = _message_factory.GetMessageClass(
+    DESCRIPTOR.message_types_by_name["GetCurrentNodeResponse"]
+)
 
 _sym_db.RegisterMessage(GroovyRequest)
 _sym_db.RegisterMessage(GroovyResponse)
 _sym_db.RegisterMessage(MindMapToJSONRequest)
 _sym_db.RegisterMessage(MindMapToJSONResponse)
+_sym_db.RegisterMessage(GetCurrentNodeRequest)
+_sym_db.RegisterMessage(GetCurrentNodeResponse)
 
 __all__ = [
     "DESCRIPTOR",
     "GroovyRequest",
     "GroovyResponse",
+    "GetCurrentNodeRequest",
+    "GetCurrentNodeResponse",
     "MindMapToJSONRequest",
     "MindMapToJSONResponse",
 ]

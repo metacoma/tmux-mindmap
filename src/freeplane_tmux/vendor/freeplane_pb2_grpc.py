@@ -21,6 +21,11 @@ class FreeplaneStub:
             request_serializer=freeplane__pb2.MindMapToJSONRequest.SerializeToString,
             response_deserializer=freeplane__pb2.MindMapToJSONResponse.FromString,
         )
+        self.GetCurrentNode = channel.unary_unary(
+            "/freeplane.Freeplane/GetCurrentNode",
+            request_serializer=freeplane__pb2.GetCurrentNodeRequest.SerializeToString,
+            response_deserializer=freeplane__pb2.GetCurrentNodeResponse.FromString,
+        )
 
 
 __all__ = ["FreeplaneStub"]

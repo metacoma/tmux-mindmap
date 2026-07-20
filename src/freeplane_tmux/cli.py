@@ -26,6 +26,12 @@ def fetch_live_map(*args, **kwargs):
     return _fetch_live_map(*args, **kwargs)
 
 
+def fetch_current_node_id(*args, **kwargs):
+    from .grpc_client import fetch_current_node_id as _fetch_current_node_id
+
+    return _fetch_current_node_id(*args, **kwargs)
+
+
 def _slugify(value: str) -> str:
     text = re.sub(r"[^A-Za-z0-9._-]+", "-", (value or "").strip()).strip("-._")
     return text or "freeplane"
@@ -87,11 +93,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--no-groovy-details",
         action="store_true",
-        help="Do not fetch Freeplane detailsText through the Groovy RPC",
+        help="Do not fetch Freeplane details through the Groovy RPC",
     )
     parser.add_argument(
         "--map-json",
-        help="Compile a local MindMapToJSON export instead of contacting Freeplane",
+        help="Use a local MindMapToJSON export instead of contacting Freeplane",
+    )
+    dump_group = parser.add_mutually_exclusive_group()
+    dump_group.add_argument(
+        "--dump",
+        action="store_true",
+        help="Print the complete current map as JSON to stdout and exit",
+    )
+    dump_group.add_argument(
+        "--dump-from-node",
+        action="store_true",
+        help="Print the selected node and its complete subtree as JSON to stdout and exit",
     )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output")
     return parser
@@ -106,6 +123,8 @@ def _validate_create_mode(args: argparse.Namespace) -> None:
         "--detached": args.detached,
         "--no-groovy-details": args.no_groovy_details,
         "--map-json": args.map_json,
+        "--dump": args.dump,
+        "--dump-from-node": args.dump_from_node,
         "--pretty": args.pretty,
     }
     used = [name for name, value in incompatible.items() if value]
@@ -118,9 +137,23 @@ def _validate_mode_combinations(args: argparse.Namespace) -> None:
         raise ValueError("--create-terminal can only be used with --create/--create-map")
     if args.detached and not args.load:
         raise ValueError("--detached can only be used with --load")
+    if args.dump_from_node and args.map_json:
+        raise ValueError("--dump-from-node requires a live Freeplane connection")
+
+    if args.dump or args.dump_from_node:
+        incompatible = {
+            "--output-dir": args.output_dir,
+            "--json-out": args.json_out,
+            "--yaml-out": args.yaml_out,
+            "--load": args.load,
+            "--detached": args.detached,
+        }
+        used = [name for name, value in incompatible.items() if value]
+        if used:
+            raise ValueError(f"dump mode cannot be combined with: {', '.join(used)}")
 
 
-def _load_map(args: argparse.Namespace) -> tuple[RawNode, dict]:
+def _load_raw_map(args: argparse.Namespace) -> dict:
     if args.map_json:
         raw_data = json.loads(Path(args.map_json).expanduser().read_text(encoding="utf-8"))
     else:
@@ -131,7 +164,29 @@ def _load_map(args: argparse.Namespace) -> tuple[RawNode, dict]:
         )
     if not isinstance(raw_data, dict):
         raise ValueError("map JSON root must be an object")
+    return raw_data
+
+
+def _load_map(args: argparse.Namespace) -> tuple[RawNode, dict]:
+    raw_data = _load_raw_map(args)
     return RawNode.model_validate(raw_data), raw_data
+
+
+def _find_subtree(node: dict, node_id: str) -> dict | None:
+    if str(node.get("id", "")) == node_id:
+        return node
+    for child in node.get("children", []) or []:
+        if not isinstance(child, dict):
+            continue
+        found = _find_subtree(child, node_id)
+        if found is not None:
+            return found
+    return None
+
+
+def _dump_json(value: dict, *, pretty: bool) -> None:
+    indent = 2 if pretty else None
+    print(json.dumps(value, ensure_ascii=False, indent=indent))
 
 
 def _output_paths(args: argparse.Namespace, session_name: str) -> tuple[Path, Path]:
@@ -175,6 +230,22 @@ def _run_main(args: argparse.Namespace) -> int:
             load_command=_create_load_command(args),
         )
         print(created_name)
+        return 0
+
+    if args.dump or args.dump_from_node:
+        selected_node_id = None
+        if args.dump_from_node:
+            selected_node_id = fetch_current_node_id(address=args.addr, timeout=args.timeout)
+
+        raw_data = _load_raw_map(args)
+        if selected_node_id is not None:
+            subtree = _find_subtree(raw_data, selected_node_id)
+            if subtree is None:
+                raise RuntimeError(
+                    f"selected Freeplane node {selected_node_id!r} is absent from the map export"
+                )
+            raw_data = subtree
+        _dump_json(raw_data, pretty=args.pretty)
         return 0
 
     root, raw_data = _load_map(args)
