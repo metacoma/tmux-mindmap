@@ -59,11 +59,6 @@
       "name": "window-inheritance",
       "map": "window-inheritance.map.json",
       "tmuxp": "window-inheritance.tmuxp.yaml"
-    },
-    {
-      "name": "root-lookup-lists",
-      "map": "root-lookup-lists.map.json",
-      "tmuxp": "root-lookup-lists.tmuxp.yaml"
     }
   ]
 }

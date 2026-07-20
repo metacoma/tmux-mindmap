@@ -409,150 +409,6 @@ def test_root_attributes_remain_flat_globals() -> None:
     assert step.command == "echo mgmt.example.org prod mindmap"
 
 
-def test_root_lookup_traverses_tree_instead_of_flat_namespace() -> None:
-    raw = node(
-        "root",
-        "demo",
-        attributes={"root.a.b.c": "flat-value"},
-        children=[
-            node(
-                "a",
-                "a",
-                children=[node("b", "b", children=[node("c-node", "c", detail="tree-value")])],
-            ),
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[node("command", "echo {{ root.a.b.c }}")],
-            ),
-        ],
-    )
-
-    step = compile_map(raw).windows[0].panes[0].steps[0]
-    assert step.command == "echo tree-value"
-
-
-def test_root_lookup_children_override_detail_and_emit_list_from_children() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "temperature",
-                "temperature",
-                detail="ignored detail",
-                children=[
-                    node(
-                        "ips",
-                        "ips",
-                        detail="ignored detail words",
-                        children=[
-                            node("ip-1", "10.20.0.3"),
-                            node("ip-2", "10.20.0.4"),
-                            node("ip-3", "10.20.0.5"),
-                        ],
-                    )
-                ],
-            ),
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[
-                    node(
-                        "command",
-                        'for i in {{ root.temperature.ips }}; do echo "$i"; done',
-                    )
-                ],
-            ),
-        ],
-    )
-
-    step = compile_map(raw).windows[0].panes[0].steps[0]
-    assert step.command == 'for i in 10.20.0.3 10.20.0.4 10.20.0.5; do echo "$i"; done'
-
-
-def test_root_lookup_detail_value_renders_as_shell_safe_list() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "temperature",
-                "temperature",
-                children=[
-                    node(
-                        "public_ips",
-                        "public_ips",
-                        detail='8.8.8.8 "1.1.1.1 two" "$(touch /tmp/pwned)"',
-                    )
-                ],
-            ),
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[
-                    node(
-                        "command",
-                        (
-                            "for i in {{ root.temperature.public_ips }}; do "
-                            "printf '<%s>\\n' \"$i\"; done"
-                        ),
-                    )
-                ],
-            ),
-        ],
-    )
-
-    step = compile_map(raw).windows[0].panes[0].steps[0]
-    assert step.command == (
-        "for i in 8.8.8.8 '1.1.1.1 two' '$(touch /tmp/pwned)'; do printf '<%s>\\n' \"$i\"; done"
-    )
-
-
-def test_root_lookup_works_inside_helper_relationship_and_preserves_existing_builtins() -> None:
-    raw = node(
-        "root",
-        "demo",
-        attributes={"mgmt": "mgmt.example.org"},
-        children=[
-            node(
-                "inventory",
-                "inventory",
-                children=[
-                    node(
-                        "hosts",
-                        "hosts",
-                        children=[node("host-1", "db 01"), node("host-2", "db$(02)")],
-                    )
-                ],
-            ),
-            node(
-                "helper",
-                "echo {{ window.name }} {{ pane.name }} {{ mgmt }} {{ root.inventory.hosts }}",
-            ),
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                attributes={"window-mode": "pane-list"},
-                children=[
-                    node(
-                        "pane",
-                        "remote host",
-                        children=[node("command", "", relationships=["helper"])],
-                    )
-                ],
-            ),
-        ],
-    )
-
-    step = compile_map(raw).windows[0].panes[0].steps[0]
-    assert step.command == "echo ops remote host mgmt.example.org 'db 01' 'db$(02)'"
-
-
 def test_pane_name_builtin_is_available_across_pane_execution_path() -> None:
     raw = node(
         "root",
@@ -707,3 +563,136 @@ def test_unresolved_template_in_pane_name_is_rejected() -> None:
 
     with pytest.raises(SemanticError, match="pane name.*missing-pane.name"):
         compile_map(raw)
+
+
+def test_root_direct_child_list_lookup_renders_in_shell() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "ips",
+                "ips",
+                children=[
+                    node("ip1", "10.20.0.3"),
+                    node("ip2", "10.20.0.4"),
+                    node("ip3", "10.20.0.5"),
+                ],
+            ),
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                children=[
+                    node(
+                        "cmd",
+                        "show all ips",
+                        detail='for i in {{ root.ips }}; do echo "$i"; done',
+                    )
+                ],
+            ),
+        ],
+    )
+
+    pane = compile_map(raw).windows[0].panes[0]
+    assert [step.command for step in pane.steps] == [
+        'for i in 10.20.0.3 10.20.0.4 10.20.0.5; do echo "$i"; done'
+    ]
+
+
+def test_root_hierarchical_lookup_prefers_children_over_detail() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "temperature",
+                "temperature",
+                children=[
+                    node(
+                        "ips-node",
+                        "ips",
+                        detail="should be ignored",
+                        children=[node("ip1", "10.20.0.3"), node("ip2", "10.20.0.4")],
+                    )
+                ],
+            ),
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                children=[
+                    node(
+                        "cmd",
+                        "show all ips",
+                        detail='for i in {{ root.temperature.ips }}; do echo "$i"; done',
+                    )
+                ],
+            ),
+        ],
+    )
+
+    pane = compile_map(raw).windows[0].panes[0]
+    assert [step.command for step in pane.steps] == [
+        'for i in 10.20.0.3 10.20.0.4; do echo "$i"; done'
+    ]
+
+
+def test_root_detail_list_lookup_renders_as_shell_safe_words() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node("public-ips", "public_ips", detail='8.8.8.8 "one two" "$(touch hacked)"'),
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                children=[
+                    node(
+                        "cmd",
+                        "show public ips",
+                        detail='for i in {{ root.public_ips }}; do printf "%s\\n" "$i"; done',
+                    )
+                ],
+            ),
+        ],
+    )
+
+    pane = compile_map(raw).windows[0].panes[0]
+    assert [step.command for step in pane.steps] == [
+        "for i in 8.8.8.8 'one two' '$(touch hacked)'; do printf \"%s\\n\" \"$i\"; done"
+    ]
+
+
+def test_root_lookup_works_inside_relationship_helper_commands() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "temperature",
+                "temperature",
+                children=[
+                    node(
+                        "ips",
+                        "ips",
+                        children=[node("ip1", "10.20.0.3"), node("ip2", "10.20.0.4")],
+                    )
+                ],
+            ),
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                attributes={"window-mode": "single-pane"},
+                children=[node("call", "run", relationship="fn")],
+            ),
+            node("fn", 'for i in {{ root.temperature.ips }}; do echo "$i"; done'),
+        ],
+    )
+
+    assert [step.command for step in compile_map(raw).windows[0].panes[0].steps] == [
+        "run",
+        'for i in 10.20.0.3 10.20.0.4; do echo "$i"; done',
+    ]

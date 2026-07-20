@@ -90,7 +90,6 @@ def test_run_tmuxp_converts_nonzero_system_exit(monkeypatch, tmp_path: Path) -> 
 def test_detached_arguments_match_tmuxp_load_parser(tmp_path: Path) -> None:
     import argparse
 
-    pytest.importorskip("tmuxp")
     from tmuxp.cli.load import create_load_subparser
 
     parser = create_load_subparser(argparse.ArgumentParser())

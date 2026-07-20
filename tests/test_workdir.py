@@ -116,7 +116,6 @@ def test_unresolved_root_workdir_is_rejected() -> None:
 
 
 def test_tmuxp_loader_accepts_emitted_session_start_directory() -> None:
-    pytest.importorskip("tmuxp")
     from tmuxp.workspace.loader import expand
 
     raw = node(

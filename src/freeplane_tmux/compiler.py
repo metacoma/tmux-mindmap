@@ -62,7 +62,7 @@ class MindmapCompiler:
     def __init__(self, root: RawNode):
         self.root = root
         self.index: dict[str, RawNode] = {}
-        self._resolver = ScopeResolver()
+        self._resolver = ScopeResolver(self.root)
         self._window_inheritance_cache: dict[str, _WindowInheritanceSpec] = {}
         self._build_index(root)
         self._validate_relationship_targets()
@@ -239,7 +239,6 @@ class MindmapCompiler:
             ),
             strict=strict,
             subject=subject,
-            root_node=self.root,
         )
 
     def _render_node_text(

@@ -10,13 +10,12 @@ from .models import AliasTemplate, RawNode, ScopeLayer, ScopeSnapshot
 from .templates import (
     TEMPLATE_RE,
     ShellList,
-    TemplateValue,
     render_template,
     require_resolved,
-    shellify_template_value,
+    stringify_shell_value,
     stringify_template_value,
 )
-from .text import sanitize_details_text, split_shell_commands
+from .text import split_shell_commands
 
 ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
@@ -50,53 +49,24 @@ def combine_layer(base: ScopeLayer, *, aliases: dict[str, AliasTemplate]) -> Sco
     return ScopeLayer(vars=base.vars, env=base.env, pre=base.pre, aliases=aliases)
 
 
-def _detail_to_shell_words(value: str) -> tuple[str, ...]:
-    try:
-        words = tuple(shlex.split(value, posix=True))
-    except ValueError:
-        words = ()
-    if words:
-        return words
-    return (value,)
-
-
-def _node_template_value(node: RawNode) -> TemplateValue:
-    if node.children:
-        child_values = [_node_template_value(child) for child in node.children]
-        items: list[str] = []
-        for value in child_values:
-            if isinstance(value, ShellList):
-                items.extend(value.items)
-            else:
-                items.append(value)
-        child_text = " ".join(stringify_template_value(value) for value in child_values).strip()
-        return ShellList(
-            items=tuple(items),
-            text=child_text or None,
-        )
-
-    detail = sanitize_details_text(node.detail)
-    if detail.strip():
-        return ShellList(items=_detail_to_shell_words(detail), text=detail)
-
-    return node.text
-
-
-def _root_tree_lookup(root_node: RawNode | None, key: str) -> TemplateValue | None:
-    if root_node is None or key != "root" and not key.startswith("root."):
-        return None
-
-    current = root_node
-    for segment in key.split(".")[1:]:
-        current = next((child for child in current.children if child.text == segment), None)
-        if current is None:
-            return None
-
-    return _node_template_value(current)
-
-
 class ScopeResolver:
     """Resolve a path-scoped stack at the exact command call site."""
+
+    def __init__(self, root_node: RawNode | None = None):
+        self.root_node = root_node
+
+    @staticmethod
+    def _parse_detail_list(value: str) -> tuple[str, ...] | None:
+        text = value.strip()
+        if not text or "\n" in text:
+            return None
+        try:
+            parts = tuple(shlex.split(text, posix=True))
+        except ValueError:
+            return None
+        if len(parts) <= 1:
+            return None
+        return parts
 
     def resolve(
         self,
@@ -105,7 +75,6 @@ class ScopeResolver:
         builtins: dict[str, str],
         strict: bool,
         subject: str,
-        root_node: RawNode | None = None,
     ) -> ScopeSnapshot:
         raw_vars: dict[str, str] = {}
         raw_env: dict[str, str] = {}
@@ -121,8 +90,66 @@ class ScopeResolver:
         namespace_raw: dict[str, str] = {**raw_vars, **raw_env, **builtins}
         resolved_namespace: dict[str, str] = {}
         resolving: list[str] = []
+        node_value_cache: dict[str, str | ShellList] = {}
+        node_value_resolving: list[str] = []
 
-        def resolve_key(key: str) -> str | None:
+        def resolve_node_value(node: RawNode) -> str | ShellList:
+            cached = node_value_cache.get(node.id)
+            if cached is not None:
+                return cached
+            if node.id in node_value_resolving:
+                cycle = " -> ".join([*node_value_resolving, node.id])
+                raise SemanticError(f"cyclic root template reference: {cycle}")
+
+            node_value_resolving.append(node.id)
+            try:
+                if node.children:
+                    items: list[str] = []
+                    for child in node.children:
+                        child_value = resolve_node_value(child)
+                        if isinstance(child_value, ShellList):
+                            items.extend(child_value.items)
+                        else:
+                            items.append(child_value)
+                    result: str | ShellList = ShellList(tuple(items))
+                elif node.detail is not None and node.detail.strip():
+                    rendered_detail = render_template(
+                        node.detail,
+                        lookup_value,
+                        stringify=stringify_template_value,
+                    )
+                    parsed_list = self._parse_detail_list(rendered_detail)
+                    result = ShellList(parsed_list) if parsed_list is not None else rendered_detail
+                else:
+                    result = render_template(
+                        node.text,
+                        lookup_value,
+                        stringify=stringify_template_value,
+                    )
+            finally:
+                node_value_resolving.pop()
+
+            node_value_cache[node.id] = result
+            return result
+
+        def resolve_root_key(key: str) -> str | ShellList | None:
+            if self.root_node is None or not (key == "root" or key.startswith("root.")):
+                return None
+            if key == "root":
+                return resolve_node_value(self.root_node)
+
+            current = self.root_node
+            for segment in key.split(".")[1:]:
+                match = next((child for child in current.children if child.text == segment), None)
+                if match is None:
+                    return None
+                current = match
+            return resolve_node_value(current)
+
+        def lookup_value(key: str) -> str | ShellList | None:
+            root_value = resolve_root_key(key)
+            if root_value is not None:
+                return root_value
             if key in resolved_namespace:
                 return resolved_namespace[key]
             if key not in namespace_raw:
@@ -134,26 +161,17 @@ class ScopeResolver:
             resolving.append(key)
             rendered = render_template(
                 namespace_raw[key],
-                lookup,
-                formatter=stringify_template_value,
+                lookup_value,
+                stringify=stringify_template_value,
             )
             resolving.pop()
             resolved_namespace[key] = rendered
             return rendered
 
-        def lookup(key: str) -> TemplateValue | None:
-            root_value = _root_tree_lookup(root_node, key)
-            if root_value is not None:
-                return root_value
-            value = resolve_key(key)
-            if value is not None:
-                if TEMPLATE_RE.search(value):
-                    return None
-                return value
-            return None
-
         for key in namespace_raw:
-            resolve_key(key)
+            value = lookup_value(key)
+            if isinstance(value, str):
+                resolved_namespace[key] = value
 
         vars_out = {
             key: value
@@ -166,9 +184,22 @@ class ScopeResolver:
             if (value := resolved_namespace.get(key)) is not None and not TEMPLATE_RE.search(value)
         }
 
+        def lookup(key: str) -> str | ShellList | None:
+            root_value = resolve_root_key(key)
+            if root_value is not None:
+                return root_value
+            value = resolved_namespace.get(key)
+            if value is None or TEMPLATE_RE.search(value):
+                return None
+            return value
+
         pre_out: list[str] = []
         for index, command_template in enumerate(raw_pre):
-            rendered = render_template(command_template, lookup, formatter=shellify_template_value)
+            rendered = render_template(
+                command_template,
+                lookup,
+                stringify=stringify_shell_value,
+            )
             if TEMPLATE_RE.search(rendered):
                 if strict:
                     require_resolved(rendered, subject=f"pre command {index + 1} for {subject}")
@@ -183,7 +214,7 @@ class ScopeResolver:
                 rendered = render_template(
                     command_template,
                     lookup,
-                    formatter=shellify_template_value,
+                    stringify=stringify_shell_value,
                 )
                 if TEMPLATE_RE.search(rendered):
                     unresolved = True
@@ -205,15 +236,14 @@ class ScopeResolver:
             env=env_out,
             pre=tuple(pre_out),
             aliases=aliases_out,
-            root_lookup=(
-                (lambda key: _root_tree_lookup(root_node, key)) if root_node is not None else None
-            ),
+            root_lookup=resolve_root_key,
         )
 
     def render_value(self, template: str, scope: ScopeSnapshot, *, subject: str) -> str:
-        rendered = render_template(template, scope.lookup, formatter=stringify_template_value)
+        rendered = render_template(template, scope.lookup, stringify=stringify_template_value)
         return require_resolved(rendered, subject=subject)
 
     def render_command(self, template: str, scope: ScopeSnapshot, *, subject: str) -> list[str]:
-        rendered = render_template(template, scope.lookup, formatter=shellify_template_value)
-        return split_shell_commands(require_resolved(rendered, subject=subject))
+        rendered = render_template(template, scope.lookup, stringify=stringify_shell_value)
+        rendered = require_resolved(rendered, subject=subject)
+        return split_shell_commands(rendered)
