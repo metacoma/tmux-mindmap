@@ -1,42 +1,113 @@
 {
-  "text": "root-lookup-demo",
-  "id": "root",
+  "text": "kubernetes cluster",
+  "id": "ID_1090958577",
   "children": [
     {
-      "text": "inventory",
-      "id": "inventory",
+      "text": "temperature",
+      "id": "ID_802723496",
       "children": [
         {
           "text": "ips",
-          "id": "ips",
+          "id": "ID_329154201",
           "children": [
-            {"text": "10.20.0.3", "id": "ip-1"},
-            {"text": "10.20.0.4", "id": "ip-2"},
-            {"text": "10.20.0.5", "id": "ip-3"}
+            {
+              "text": "10.20.0.3",
+              "id": "ID_70937118"
+            },
+            {
+              "text": "10.20.0.4",
+              "id": "ID_870529717"
+            },
+            {
+              "text": "10.20.0.5",
+              "id": "ID_1871627227"
+            },
+            {
+              "text": "10.20.0.6",
+              "id": "ID_872838493"
+            }
           ]
         },
         {
           "text": "public_ips",
-          "id": "public-ips",
-          "detail": "8.8.8.8 \"1.1.1.1 two\""
+          "id": "ID_430178360",
+          "detail": "8.8.8.8 1.1.1.1 4.4.4.4"
+        }
+      ],
+      "detail": "ignored because children exist"
+    },
+    {
+      "text": "ips",
+      "id": "ID_329154201_direct",
+      "children": [
+        {
+          "text": "10.20.0.3",
+          "id": "ID_70937118_direct"
+        },
+        {
+          "text": "10.20.0.4",
+          "id": "ID_870529717_direct"
+        },
+        {
+          "text": "10.20.0.5",
+          "id": "ID_1871627227_direct"
+        },
+        {
+          "text": "10.20.0.6",
+          "id": "ID_872838493_direct"
         }
       ]
     },
     {
-      "text": "ops",
-      "id": "window",
-      "tags": ["WINDOW"],
-      "attributes": {"window-mode": "single-pane"},
+      "text": "public_ips",
+      "id": "ID_430178360_direct",
+      "detail": "8.8.8.8 1.1.1.1 4.4.4.4"
+    },
+    {
+      "text": "test-node-ips",
+      "id": "ID_1526790263",
       "children": [
         {
-          "text": "for i in {{ root.inventory.ips }}; do echo \"$i\"; done",
-          "id": "show-private"
-        },
-        {
-          "text": "for i in {{ root.inventory.public_ips }}; do printf '<%s>\\n' \"$i\"; done",
-          "id": "show-public"
+          "text": "show all ips",
+          "id": "ID_772336868",
+          "detail": "for i in {{ root.ips }}; do echo \"$i\"; done"
         }
+      ],
+      "tags": [
+        "WINDOW"
+      ]
+    },
+    {
+      "text": "test-detail-ips",
+      "id": "ID_731773212",
+      "children": [
+        {
+          "text": "show all ips",
+          "id": "ID_1894090759",
+          "detail": "for i in {{ root.public_ips }}; do echo \"$i\"; done"
+        }
+      ],
+      "tags": [
+        "WINDOW"
+      ]
+    },
+    {
+      "text": "test-hierarchical-ips",
+      "id": "ID_731773213",
+      "children": [
+        {
+          "text": "show all nested ips",
+          "id": "ID_1894090760",
+          "detail": "for i in {{ root.temperature.ips }}; do echo \"$i\"; done"
+        }
+      ],
+      "tags": [
+        "WINDOW"
       ]
     }
-  ]
+  ],
+  "attributes": {
+    "mgmt": "mgmt.example.invalid"
+  },
+  "detail": "hello r/tmux"
 }
