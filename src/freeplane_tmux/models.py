@@ -52,31 +52,37 @@ class AliasTemplate:
 
 @dataclass(frozen=True)
 class ScopeLayer:
-    vars: dict[str, str] = field(default_factory=dict)
+    scoped_vars: dict[str, str] = field(default_factory=dict)
     env: dict[str, str] = field(default_factory=dict)
     pre: tuple[str, ...] = ()
     aliases: dict[str, AliasTemplate] = field(default_factory=dict)
+    runtime_attrs: dict[str, str] = field(default_factory=dict)
+    call_args: dict[str, str] = field(default_factory=dict)
+    helper_defaults: dict[str, str] = field(default_factory=dict)
+    tmux_mode: str | None = None
+    tmux_layout: str | None = None
 
 
 @dataclass(frozen=True)
 class ScopeSnapshot:
     vars: dict[str, str] = field(default_factory=dict)
+    lists: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    object_fields: dict[str, tuple[str, ...]] = field(default_factory=dict)
     env: dict[str, str] = field(default_factory=dict)
     pre: tuple[str, ...] = ()
     aliases: dict[str, str] = field(default_factory=dict)
-    root_lookup: Callable[[str], Any | None] | None = None
+    lookup_value: Callable[[str], Any | None] | None = None
 
     def lookup(self, key: str) -> Any | None:
-        if key == "root" or key.startswith("root."):
-            if self.root_lookup is not None:
-                value = self.root_lookup(key)
-                if value is not None:
-                    return value
         if key in self.vars:
             return self.vars[key]
+        if key in self.lists:
+            return self.lists[key]
         if key in self.env:
             return self.env[key]
-        return None
+        if self.lookup_value is None:
+            return None
+        return self.lookup_value(key)
 
 
 @dataclass(frozen=True)
@@ -101,6 +107,7 @@ class WindowSpec:
     window_id: str
     name: str
     mode: Literal["single_implicit_pane", "pane_list", "mixed"]
+    layout: str | None
     panes: tuple[PaneSpec, ...]
 
 

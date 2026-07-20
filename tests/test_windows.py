@@ -49,22 +49,24 @@ def test_complex_children_become_pane_list() -> None:
     ]
 
 
-def test_intermediate_path_attributes_are_inherited() -> None:
+def test_intermediate_path_scoped_variables_are_inherited() -> None:
     raw = node(
         "root",
         "demo",
-        attributes={"ROOT": "root"},
+        attributes={"var.root_value": "root"},
         children=[
             node(
                 "group",
                 "group",
-                attributes={"VALUE": "from-group"},
+                attributes={"var.group_value": "from-group"},
                 children=[
                     node(
                         "window",
                         "ops",
                         tags=["WINDOW"],
-                        children=[node("command", "echo {{ROOT}} {{VALUE}}")],
+                        children=[
+                            node("command", "run", detail="echo {{ root_value }} {{ group_value }}")
+                        ],
                     )
                 ],
             )

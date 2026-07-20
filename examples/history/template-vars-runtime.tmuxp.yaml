@@ -1,0 +1,16 @@
+session_name: ops-demo
+windows:
+- window_name: db
+  layout: main-horizontal
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - export PROJECT_DIR=/srv/project
+    - printf '\033]2;%s\033\\' main
+    - echo pre db01
+    - echo alice OK eu /srv/project db01 jira_cmdb jira_cmdb_sam
+    - for i in 10.10.0.1 'two words'; do printf "%s\n" "$i"; done
+    environment:
+      PROJECT_DIR: /srv/project

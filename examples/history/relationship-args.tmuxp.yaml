@@ -1,5 +1,4 @@
-session_name: demo-prod
-start_directory: /srv/demo-prod
+session_name: relationships
 windows:
 - window_name: ops
   layout: main-horizontal
@@ -8,5 +7,8 @@ windows:
     pane-border-format: '#{pane_index}: #{pane_title}'
   panes:
   - shell_command:
-    - printf '\033]2;%s\033\\' hello
-    - echo ok
+    - echo window
+    - echo pane
+    - mongo
+    - echo current
+    - connect

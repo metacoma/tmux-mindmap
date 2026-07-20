@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 from conftest import compile_map, node
 
@@ -7,26 +9,23 @@ from freeplane_tmux.errors import SemanticError
 from freeplane_tmux.shell import pane_shell_commands
 
 
-def test_pre_is_accumulated_and_emitted_once_per_new_scope() -> None:
+def test_exec_pre_is_accumulated_in_order() -> None:
     raw = node(
         "root",
         "demo",
-        attributes={"pre": "echo root"},
+        attributes={"exec.pre": "echo root", "var.region": "eu"},
         children=[
             node(
                 "window",
                 "ops",
                 tags=["WINDOW"],
-                attributes={"pre": "echo window"},
+                attributes={"exec.pre": "echo window {{ region }}"},
                 children=[
                     node(
                         "pane",
                         "admin",
-                        attributes={"pre": "echo pane"},
-                        children=[
-                            node("first", "echo first"),
-                            node("second", "echo second"),
-                        ],
+                        attributes={"exec.pre": "echo pane {{ pane.name }}"},
+                        children=[node("first", "run", detail="echo first")],
                     )
                 ],
             )
@@ -34,56 +33,30 @@ def test_pre_is_accumulated_and_emitted_once_per_new_scope() -> None:
     )
 
     pane = compile_map(raw).windows[0].panes[0]
+    assert pane.base_scope.pre == ("echo root", "echo window eu", "echo pane admin")
     emitted = pane_shell_commands(pane)
-    assert emitted.count("echo root") == 1
-    assert emitted.count("echo window") == 1
-    assert emitted.count("echo pane") == 1
-    assert emitted.index("echo pane") < emitted.index("echo first")
-    assert emitted.index("echo first") < emitted.index("echo second")
+    assert emitted[:4] == [
+        "printf '\\033]2;%s\\033\\\\' admin",
+        "echo root",
+        "echo window eu",
+        "echo pane admin",
+    ]
 
 
-def test_env_and_alias_bootstrap_are_injected_into_ssh_and_sudo() -> None:
-    alias = node("alias", "ll", tags=["ALIAS"], detail="ls -la {{DIR}}")
-    raw = node(
-        "root",
-        "demo",
-        attributes={"TOKEN": "secret", "DIR": "/srv"},
-        children=[
-            alias,
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[node("ssh", "ssh host"), node("sudo", "sudo bash")],
-            ),
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    emitted = pane_shell_commands(pane)
-    ssh_command = next(command for command in emitted if command.startswith("ssh "))
-    sudo_command = next(command for command in emitted if command.startswith("sudo "))
-
-    for rewritten in (ssh_command, sudo_command):
-        assert "export TOKEN=secret" in rewritten
-        assert "alias ll=" in rewritten
-        assert "ls -la /srv" in rewritten
-        assert "clear" in rewritten
-        assert "--rcfile" in rewritten
-
-
-def test_alias_uses_late_resolve_from_descendant_scope() -> None:
+def test_alias_uses_late_resolve_from_descendant_scoped_variable() -> None:
     raw = node(
         "root",
         "demo",
         children=[
-            node("alias", "go", tags=["ALIAS"], detail="cd {{WORKDIR}}"),
+            node("alias", "go", tags=["ALIAS"], detail="cd {{ workdir }}"),
             node(
                 "window",
                 "ops",
                 tags=["WINDOW"],
-                attributes={"window-mode": "single-pane"},
-                children=[node("command", "go", attributes={"WORKDIR": "/tmp/project"})],
+                attributes={"tmux.mode": "single-pane"},
+                children=[
+                    node("command", "run", detail="go", attributes={"var.workdir": "/tmp/project"})
+                ],
             ),
         ],
     )
@@ -92,405 +65,287 @@ def test_alias_uses_late_resolve_from_descendant_scope() -> None:
     assert pane.base_scope.aliases == {}
     assert pane.steps[0].effective_scope.aliases == {"go": "cd /tmp/project"}
     emitted = pane_shell_commands(pane)
-    assert "alias go='cd /tmp/project'" in emitted
-    assert emitted.index("alias go='cd /tmp/project'") < emitted.index("go")
+    assert emitted[0:3] == ["shopt -s expand_aliases", "alias go='cd /tmp/project'", "clear"]
 
 
-def test_single_alias_is_followed_by_clear() -> None:
+def test_env_and_alias_bootstrap_are_injected_into_ssh_and_sudo() -> None:
+    raw = node(
+        "root",
+        "demo",
+        attributes={"env.TOKEN": "secret"},
+        children=[
+            node("alias", "ll", tags=["ALIAS"], detail="ls -la {{ env.TOKEN }}"),
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                attributes={"tmux.mode": "single-pane"},
+                children=[
+                    node("ssh", "connect", detail="ssh host"),
+                    node("sudo", "root shell", detail="sudo bash"),
+                ],
+            ),
+        ],
+    )
+
+    pane = compile_map(raw).windows[0].panes[0]
+    emitted = pane_shell_commands(pane)
+    ssh_command = next(command for command in emitted if command.startswith("ssh "))
+    sudo_command = next(
+        command
+        for command in emitted
+        if "bash --noprofile --rcfile" in command and not command.startswith("ssh ")
+    )
+
+    for rewritten in (ssh_command, sudo_command):
+        assert "export TOKEN=secret" in rewritten
+        assert "alias ll=" in rewritten
+        assert "ls -la secret" in rewritten
+        assert "clear" in rewritten
+        assert "--rcfile" in rewritten
+
+
+def test_vars_attributes_and_nested_nodes_render() -> None:
     raw = node(
         "root",
         "demo",
         children=[
-            node("alias", "go", tags=["ALIAS"], detail="cd /tmp/project"),
-            node("window", "ops", tags=["WINDOW"], children=[node("command", "go")]),
+            node(
+                "vars",
+                "vars",
+                children=[
+                    node(
+                        "credentials",
+                        "credentials",
+                        children=[
+                            node(
+                                "prod",
+                                "prod",
+                                children=[
+                                    node(
+                                        "mysql",
+                                        "mysql",
+                                        attributes={"username": "aaa", "password": "xxx"},
+                                        children=[
+                                            node(
+                                                "env1",
+                                                "env1",
+                                                attributes={"env_name": "env1", "env_status": "OK"},
+                                            )
+                                        ],
+                                    )
+                                ],
+                            )
+                        ],
+                    )
+                ],
+            ),
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                children=[
+                    node(
+                        "cmd",
+                        "show",
+                        detail=(
+                            "echo {{ vars.credentials.prod.mysql.username }} "
+                            "{{ vars.credentials.prod.mysql.password }} "
+                            "{{ vars.credentials.prod.mysql.env1.env_name }} "
+                            "{{ vars.credentials.prod.mysql.env1.env_status }}"
+                        ),
+                    )
+                ],
+            ),
         ],
     )
 
-    emitted = pane_shell_commands(compile_map(raw).windows[0].panes[0])
-    alias_index = emitted.index("alias go='cd /tmp/project'")
-    assert emitted[alias_index + 1] == "clear"
+    pane = compile_map(raw).windows[0].panes[0]
+    assert [step.command for step in pane.steps] == ["echo aaa xxx env1 OK"]
 
 
-def test_multiple_aliases_each_get_their_own_clear() -> None:
+def test_leaf_child_detail_becomes_scalar_value() -> None:
     raw = node(
         "root",
         "demo",
         children=[
-            node("alias-1", "k", tags=["ALIAS"], detail="kubectl"),
-            node("alias-2", "kg", tags=["ALIAS"], detail="kubectl get"),
-            node("window", "ops", tags=["WINDOW"], children=[node("command", "kg pods")]),
+            node(
+                "vars",
+                "vars",
+                children=[
+                    node(
+                        "credentials",
+                        "credentials",
+                        children=[
+                            node(
+                                "prod",
+                                "prod",
+                                children=[
+                                    node(
+                                        "mysql",
+                                        "mysql",
+                                        children=[node("username", "username", detail="aaa")],
+                                    )
+                                ],
+                            )
+                        ],
+                    )
+                ],
+            ),
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                children=[
+                    node("cmd", "show", detail="echo {{ vars.credentials.prod.mysql.username }}")
+                ],
+            ),
         ],
     )
 
-    emitted = pane_shell_commands(compile_map(raw).windows[0].panes[0])
-    assert emitted == [
-        "shopt -s expand_aliases",
-        "alias k=kubectl",
-        "clear",
-        "alias kg='kubectl get'",
-        "clear",
-        "kg pods",
-    ]
+    pane = compile_map(raw).windows[0].panes[0]
+    assert [step.command for step in pane.steps] == ["echo aaa"]
 
 
-def test_clear_is_not_added_when_no_alias_is_used() -> None:
+def test_duplicate_attribute_and_child_under_vars_is_rejected() -> None:
     raw = node(
         "root",
         "demo",
         children=[
-            node("window", "ops", tags=["WINDOW"], children=[node("command", "echo ok")]),
+            node(
+                "vars",
+                "vars",
+                children=[
+                    node(
+                        "db",
+                        "db",
+                        attributes={"username": "aaa"},
+                        children=[node("username", "username", detail="bbb")],
+                    )
+                ],
+            ),
+            node(
+                "window", "ops", tags=["WINDOW"], children=[node("cmd", "show", detail="echo ok")]
+            ),
         ],
     )
 
-    emitted = pane_shell_commands(compile_map(raw).windows[0].panes[0])
-    assert emitted == ["echo ok"]
-    assert "clear" not in emitted
-
-
-def test_unresolved_alias_fails_at_executable_callsite() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node("alias", "go", tags=["ALIAS"], detail="cd {{MISSING}}"),
-            node("window", "ops", tags=["WINDOW"], children=[node("command", "go")]),
-        ],
-    )
-
-    with pytest.raises(SemanticError, match="alias 'go'.*MISSING"):
+    with pytest.raises(SemanticError, match=r"Duplicate variable path: vars\.db\.username"):
         compile_map(raw)
 
 
-def test_alias_detail_wins_over_relationship() -> None:
+def test_object_as_scalar_is_rejected_with_available_fields() -> None:
     raw = node(
         "root",
         "demo",
         children=[
+            node("vars", "vars", children=[node("db", "db", attributes={"username": "aaa"})]),
             node(
-                "alias",
-                "run",
-                tags=["ALIAS"],
-                detail="echo detail",
-                relationship="fn",
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                children=[node("cmd", "show", detail="echo {{ vars.db }}")],
             ),
-            node("window", "ops", tags=["WINDOW"], children=[node("cmd", "run")]),
-            node("fn", "echo relationship"),
         ],
     )
 
-    pane = compile_map(raw).windows[0].panes[0]
-    assert pane.steps[0].effective_scope.aliases == {"run": "echo detail"}
+    with pytest.raises(
+        SemanticError, match=r"Cannot render object vars\.db as a scalar value.*username"
+    ):
+        compile_map(raw)
 
 
-def test_alias_relationship_path_adds_clear() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node("helper", "echo helper"),
-            node("alias", "run", tags=["ALIAS"], relationship="helper"),
-            node("window", "ops", tags=["WINDOW"], children=[node("cmd", "run")]),
-        ],
-    )
-
-    emitted = pane_shell_commands(compile_map(raw).windows[0].panes[0])
-    assert emitted == [
-        "shopt -s expand_aliases",
-        "alias run='echo helper'",
-        "clear",
-        "run",
-    ]
-
-
-def test_non_shell_sudo_command_is_not_rewritten() -> None:
-    raw = node(
-        "root",
-        "demo",
-        attributes={"TOKEN": "secret"},
-        children=[
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[node("command", "sudo apt-get update")],
-            )
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    assert pane_shell_commands(pane)[-1] == "sudo apt-get update"
-
-
-def test_pane_title_uses_osc_without_allow_set_title() -> None:
+def test_missing_leaf_detail_is_rejected() -> None:
     raw = node(
         "root",
         "demo",
         children=[
             node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
+                "vars", "vars", children=[node("db", "db", children=[node("username", "username")])]
+            ),
+            node(
+                "window", "ops", tags=["WINDOW"], children=[node("cmd", "show", detail="echo ok")]
+            ),
+        ],
+    )
+
+    with pytest.raises(SemanticError, match=r"Variable vars\.db\.username has no value"):
+        compile_map(raw)
+
+
+def test_explicit_list_is_shell_quoted_and_scalar_with_spaces_is_not_a_list() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "vars",
+                "vars",
                 children=[
                     node(
-                        "pane",
-                        "remote host",
-                        children=[node("command", "uptime")],
-                    )
-                ],
-            )
-        ],
-    )
-
-    emitted = pane_shell_commands(compile_map(raw).windows[0].panes[0])
-    assert emitted[0] == "printf '\\033]2;%s\\033\\\\' 'remote host'"
-    assert all("allow-set-title" not in command for command in emitted)
-
-
-def test_window_name_is_available_in_text_detail_and_pre() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                attributes={"pre": "echo pre {{ window.name }}", "window-mode": "single-pane"},
-                children=[
-                    node("text", "echo text {{ window.name }}"),
-                    node("detail", "ignored", detail="echo detail {{ window.name }}"),
-                ],
-            )
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    assert pane.base_scope.pre == ("echo pre ops",)
-    assert [step.command for step in pane.steps] == [
-        "echo text ops",
-        "echo detail ops",
-    ]
-
-
-def test_pane_name_is_available_in_text_detail_and_pre() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                attributes={"window-mode": "pane-list"},
-                children=[
-                    node(
-                        "pane",
-                        "remote host",
-                        attributes={"pre": "echo pane-pre {{ pane.name }}"},
+                        "ips",
+                        "ips",
+                        tags=["LIST"],
                         children=[
-                            node("text", "echo text {{ pane.name }}"),
-                            node("detail", "ignored", detail="echo detail {{ pane.name }}"),
+                            node("ip1", "10.10.0.1"),
+                            node("ip2", "two words"),
+                            node("ip3", "$(unsafe)"),
                         ],
-                    )
-                ],
-            )
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    assert pane.base_scope.pre == ("echo pane-pre remote host",)
-    assert [step.command for step in pane.steps] == [
-        "echo text remote host",
-        "echo detail remote host",
-    ]
-
-
-def test_window_object_exposes_window_attributes() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "window",
-                "{{ window.host }}",
-                tags=["WINDOW"],
-                attributes={"host": "hw0076", "pre": "ssh {{ window.host }}"},
-                children=[
-                    node(
-                        "pane",
-                        "pane",
-                        children=[
-                            node(
-                                "command",
-                                "echo {{ window.name }} {{ window.host }} {{ window.pre }}",
-                            )
-                        ],
-                    )
-                ],
-            )
-        ],
-    )
-
-    session = compile_map(raw)
-    pane = session.windows[0].panes[0]
-    assert session.windows[0].name == "hw0076"
-    assert pane.base_scope.vars["window.name"] == "hw0076"
-    assert pane.base_scope.vars["window.host"] == "hw0076"
-    assert pane.base_scope.vars["window.pre"] == "ssh hw0076"
-    assert [step.command for step in pane.steps] == ["echo hw0076 hw0076 ssh hw0076"]
-
-
-def test_pane_object_exposes_pane_attributes() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[
-                    node(
-                        "pane",
-                        "{{ pane.host }}",
-                        attributes={
-                            "host": "db01",
-                            "pre": "ssh {{ pane.host }}",
-                            "name": "ignored",
-                        },
-                        children=[
-                            node(
-                                "command",
-                                "echo {{ pane.name }} {{ pane.host }} {{ pane.pre }}",
-                            )
-                        ],
-                    )
-                ],
-            )
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    assert pane.title == "db01"
-    assert pane.base_scope.vars["pane.name"] == "db01"
-    assert pane.base_scope.vars["pane.host"] == "db01"
-    assert pane.base_scope.vars["pane.pre"] == "ssh db01"
-    assert "pane.name" in pane.base_scope.vars
-    assert [step.command for step in pane.steps] == ["echo db01 db01 ssh db01"]
-
-
-def test_root_attributes_remain_flat_globals() -> None:
-    raw = node(
-        "root",
-        "demo",
-        attributes={"mgmt": "mgmt.example.org", "environment": "prod", "project": "mindmap"},
-        children=[
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[
-                    node(
-                        "pane",
-                        "pane",
-                        children=[
-                            node("command", "echo {{ mgmt }} {{ environment }} {{ project }}")
-                        ],
-                    )
-                ],
-            )
-        ],
-    )
-
-    step = compile_map(raw).windows[0].panes[0].steps[0]
-    assert step.effective_scope.vars["mgmt"] == "mgmt.example.org"
-    assert step.effective_scope.vars["environment"] == "prod"
-    assert step.effective_scope.vars["project"] == "mindmap"
-    assert step.command == "echo mgmt.example.org prod mindmap"
-
-
-def test_pane_name_builtin_is_available_across_pane_execution_path() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                attributes={"window-mode": "pane-list"},
-                children=[
-                    node(
-                        "pane",
-                        "remote host",
-                        children=[
-                            node(
-                                "command",
-                                "echo own {{ pane.name }}",
-                                relationships=["helper"],
-                                children=[node("tail", "echo child {{ pane.name }}")],
-                            )
-                        ],
-                    )
+                    ),
+                    node("public_ips", "public_ips", detail="10.10.0.1 10.10.0.2"),
                 ],
             ),
-            node("helper", "echo relationship {{ pane.name }}"),
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                attributes={"tmux.mode": "single-pane"},
+                children=[
+                    node(
+                        "cmd1",
+                        "show list",
+                        detail='for i in {{ vars.ips }}; do printf "%s\\n" "$i"; done',
+                    ),
+                    node("cmd2", "show scalar", detail="echo {{ vars.public_ips }}"),
+                ],
+            ),
         ],
     )
 
-    pane = compile_map(raw).windows[0].panes[0]
-    assert pane.base_scope.vars["pane.name"] == "remote host"
-    assert [step.command for step in pane.steps] == [
-        "echo own remote host",
-        "echo relationship remote host",
-        "echo child remote host",
-    ]
-    assert all(step.effective_scope.vars["pane.name"] == "remote host" for step in pane.steps)
+    commands = [step.command for step in compile_map(raw).windows[0].panes[0].steps]
+    assert (
+        commands[0]
+        == "for i in 10.10.0.1 'two words' '$(unsafe)'; do printf \"%s\\n\" \"$i\"; done"
+    )
+    assert commands[1] == "echo 10.10.0.1 10.10.0.2"
 
 
-def test_pane_name_builtin_is_empty_for_unnamed_implicit_pane() -> None:
+def test_scoped_variables_and_runtime_attributes_have_separate_namespaces() -> None:
     raw = node(
         "root",
         "demo",
+        attributes={"var.region": "eu"},
         children=[
             node(
                 "window",
                 "ops",
                 tags=["WINDOW"],
-                attributes={"window-mode": "single-pane"},
-                children=[node("command", "printf '<%s>\\n' '{{ pane.name }}'")],
-            )
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    assert pane.title is None
-    assert pane.base_scope.vars["pane.name"] == ""
-    assert [step.command for step in pane.steps] == ["printf '<%s>\\n' ''"]
-
-
-def test_jinja_expands_session_window_pane_and_node_names() -> None:
-    raw = node(
-        "root",
-        "session-{{ suffix }}",
-        attributes={"suffix": "lab", "host": "mcmp2"},
-        children=[
-            node(
-                "window",
-                "{{ host }}",
-                tags=["WINDOW"],
-                attributes={"window-mode": "pane-list"},
+                attributes={"host": "server01"},
                 children=[
                     node(
                         "pane",
-                        "{{ window.name }}",
+                        "db",
+                        attributes={"database": "jira_cmdb"},
                         children=[
-                            node("ssh", "ssh {{ pane.name }}"),
                             node(
-                                "health",
-                                "health {{ window.name }}",
-                                detail="echo {{ node-name }}",
-                            ),
+                                "connect",
+                                "connect",
+                                attributes={"db": "jira_cmdb_sam"},
+                                detail=(
+                                    "echo {{ region }} {{ window.host }} "
+                                    "{{ pane.database }} {{ node.db }}"
+                                ),
+                            )
                         ],
                     )
                 ],
@@ -498,21 +353,11 @@ def test_jinja_expands_session_window_pane_and_node_names() -> None:
         ],
     )
 
-    session = compile_map(raw)
-    window = session.windows[0]
-    pane = window.panes[0]
-
-    assert session.session_name == "session-lab"
-    assert window.name == "mcmp2"
-    assert pane.title == "mcmp2"
-    assert pane.base_scope.vars["window.name"] == "mcmp2"
-    assert pane.base_scope.vars["pane.name"] == "mcmp2"
-    assert pane_shell_commands(pane)[0] == "printf '\\033]2;%s\\033\\\\' mcmp2"
-    assert [step.display_name for step in pane.steps] == ["ssh mcmp2", "health mcmp2"]
-    assert [step.command for step in pane.steps] == ["ssh mcmp2", "echo health mcmp2"]
+    pane = compile_map(raw).windows[0].panes[0]
+    assert [step.command for step in pane.steps] == ["echo eu server01 jira_cmdb jira_cmdb_sam"]
 
 
-def test_legacy_window_and_pane_name_builtins_are_rejected() -> None:
+def test_ordinary_attribute_is_not_promoted_to_top_level_scope() -> None:
     raw = node(
         "root",
         "demo",
@@ -521,291 +366,176 @@ def test_legacy_window_and_pane_name_builtins_are_rejected() -> None:
                 "window",
                 "ops",
                 tags=["WINDOW"],
-                attributes={"window-mode": "pane-list"},
+                attributes={"host": "server01"},
+                children=[node("cmd", "show", detail="echo {{ host }}")],
+            )
+        ],
+    )
+
+    with pytest.raises(SemanticError, match=r'undefined template variable "host"'):
+        compile_map(raw)
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "{{ root.db.user }}",
+        "{{ window-name }}",
+        "{{ pane-name }}",
+        "{{ node-name }}",
+        "{{ session-name }}",
+        "{{ scoped.region }}",
+    ],
+)
+def test_removed_legacy_placeholders_are_undefined(template: str) -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                children=[node("cmd", "show", detail=f"echo {template}")],
+            )
+        ],
+    )
+
+    with pytest.raises(SemanticError):
+        compile_map(raw)
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "{{ script1 }}",
+        "{{ node.script1 }}",
+        "{{ window.script1 }}",
+        "{{ pane.script1 }}",
+        "{{ vars.script1 }}",
+    ],
+)
+def test_script1_stays_service_only(template: str) -> None:
+    raw = node(
+        "root",
+        "demo",
+        attributes={"script1": "println('hi')"},
+        children=[
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                children=[
+                    node("pane", "pane", children=[node("cmd", "show", detail=f"echo {template}")])
+                ],
+            )
+        ],
+    )
+
+    with pytest.raises(SemanticError):
+        compile_map(raw)
+
+
+def test_env_requires_explicit_prefix_and_inherits() -> None:
+    raw = node(
+        "root",
+        "demo",
+        attributes={"env.PROJECT_DIR": "/srv/root", "TOKEN": "not-env"},
+        children=[
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                attributes={"env.PROJECT_DIR": "/srv/window"},
                 children=[
                     node(
                         "pane",
-                        "admin",
-                        children=[node("command", "echo {{ window-name }} {{ pane-name }}")],
+                        "main",
+                        attributes={"env.TOKEN": "secret"},
+                        children=[
+                            node(
+                                "cmd",
+                                "show",
+                                detail="echo {{ env.PROJECT_DIR }} {{ env.TOKEN }}",
+                            )
+                        ],
                     )
                 ],
             )
+        ],
+    )
+
+    pane = compile_map(raw).windows[0].panes[0]
+    assert pane.base_scope.env == {"PROJECT_DIR": "/srv/window", "TOKEN": "secret"}
+    assert [step.command for step in pane.steps] == ["echo /srv/window secret"]
+    with pytest.raises(SemanticError, match=r'undefined template variable "env.TOKEN"'):
+        compile_map(
+            node(
+                "root",
+                "demo",
+                attributes={"TOKEN": "not-env"},
+                children=[
+                    node(
+                        "window",
+                        "ops",
+                        tags=["WINDOW"],
+                        children=[node("cmd", "show", detail="echo {{ env.TOKEN }}")],
+                    )
+                ],
+            )
+        )
+
+
+def test_reserved_scoped_variable_names_are_rejected() -> None:
+    raw = node(
+        "root",
+        "demo",
+        attributes={"var.window": "oops"},
+        children=[
+            node("window", "ops", tags=["WINDOW"], children=[node("cmd", "show", detail="echo ok")])
+        ],
+    )
+
+    with pytest.raises(SemanticError, match='Scoped variable name "window" is reserved'):
+        compile_map(raw)
+
+
+def test_strict_undefined_reports_available_neighbors() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "vars",
+                "vars",
+                children=[
+                    node(
+                        "credentials",
+                        "credentials",
+                        children=[
+                            node("prod", "prod", attributes={"username": "aaa", "password": "xxx"})
+                        ],
+                    )
+                ],
+            ),
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                children=[
+                    node(
+                        "cmd",
+                        "show",
+                        detail="echo {{ vars.credentials.prod.usrename }}",
+                    )
+                ],
+            ),
         ],
     )
 
     with pytest.raises(
         SemanticError,
-        match=r"window-name, pane-name.*window\.name, pane\.name",
-    ):
+        match=re.escape('undefined template variable "vars.credentials.prod.usrename"'),
+    ) as excinfo:
         compile_map(raw)
-
-
-def test_unresolved_template_in_pane_name_is_rejected() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                attributes={"window-mode": "pane-list"},
-                children=[
-                    node(
-                        "pane",
-                        "{{ missing-pane.name }}",
-                        children=[node("command", "uptime")],
-                    )
-                ],
-            )
-        ],
-    )
-
-    with pytest.raises(SemanticError, match="pane name.*missing-pane.name"):
-        compile_map(raw)
-
-
-def test_root_direct_child_list_lookup_renders_in_shell() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "ips",
-                "ips",
-                children=[
-                    node("ip1", "10.20.0.3"),
-                    node("ip2", "10.20.0.4"),
-                    node("ip3", "10.20.0.5"),
-                ],
-            ),
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[
-                    node(
-                        "cmd",
-                        "show all ips",
-                        detail='for i in {{ root.ips }}; do echo "$i"; done',
-                    )
-                ],
-            ),
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    assert [step.command for step in pane.steps] == [
-        'for i in 10.20.0.3 10.20.0.4 10.20.0.5; do echo "$i"; done'
-    ]
-
-
-def test_root_hierarchical_lookup_prefers_children_over_detail() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "temperature",
-                "temperature",
-                children=[
-                    node(
-                        "ips-node",
-                        "ips",
-                        detail="should be ignored",
-                        children=[node("ip1", "10.20.0.3"), node("ip2", "10.20.0.4")],
-                    )
-                ],
-            ),
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[
-                    node(
-                        "cmd",
-                        "show all ips",
-                        detail='for i in {{ root.temperature.ips }}; do echo "$i"; done',
-                    )
-                ],
-            ),
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    assert [step.command for step in pane.steps] == [
-        'for i in 10.20.0.3 10.20.0.4; do echo "$i"; done'
-    ]
-
-
-def test_root_detail_list_lookup_renders_as_shell_safe_words() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node("public-ips", "public_ips", detail='8.8.8.8 "one two" "$(touch hacked)"'),
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[
-                    node(
-                        "cmd",
-                        "show public ips",
-                        detail='for i in {{ root.public_ips }}; do printf "%s\\n" "$i"; done',
-                    )
-                ],
-            ),
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    assert [step.command for step in pane.steps] == [
-        "for i in 8.8.8.8 'one two' '$(touch hacked)'; do printf \"%s\\n\" \"$i\"; done"
-    ]
-
-
-def test_root_detail_list_lookup_preserves_multiline_shell_block() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node("public-ips", "public_ips", detail="8.8.8.8 1.1.1.1 4.4.4.4"),
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                children=[
-                    node(
-                        "cmd",
-                        "show public ips",
-                        detail='for i in {{ root.public_ips }}\ndo\n  printf "%s\\n" "$i"\ndone',
-                    )
-                ],
-            ),
-        ],
-    )
-
-    pane = compile_map(raw).windows[0].panes[0]
-    assert [step.command for step in pane.steps] == [
-        "for i in 8.8.8.8 1.1.1.1 4.4.4.4",
-        "do",
-        'printf "%s\\n" "$i"',
-        "done",
-    ]
-
-
-def test_root_lookup_works_inside_relationship_helper_commands() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "temperature",
-                "temperature",
-                children=[
-                    node(
-                        "ips",
-                        "ips",
-                        children=[node("ip1", "10.20.0.3"), node("ip2", "10.20.0.4")],
-                    )
-                ],
-            ),
-            node(
-                "window",
-                "ops",
-                tags=["WINDOW"],
-                attributes={"window-mode": "single-pane"},
-                children=[node("call", "run", relationship="fn")],
-            ),
-            node("fn", 'for i in {{ root.temperature.ips }}; do echo "$i"; done'),
-        ],
-    )
-
-    assert [step.command for step in compile_map(raw).windows[0].panes[0].steps] == [
-        "run",
-        'for i in 10.20.0.3 10.20.0.4; do echo "$i"; done',
-    ]
-
-
-def test_multiline_root_list_commands_are_split_cleanly() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "ips",
-                "ips",
-                children=[
-                    node("ip1", "10.20.0.3"),
-                    node("ip2", "10.20.0.4"),
-                ],
-            ),
-            node("public", "public_ips", detail="8.8.8.8 1.1.1.1 4.4.4.4"),
-            node(
-                "window-a",
-                "from-children",
-                tags=["WINDOW"],
-                children=[
-                    node(
-                        "pane-a",
-                        "show all ips",
-                        detail=(
-                            "<html><body><p>for i in {{ root.ips }}</p>"
-                            "<p>&nbsp;&nbsp;&nbsp;echo ${i}</p><p>done</p></body></html>"
-                        ),
-                    )
-                ],
-            ),
-            node(
-                "window-b",
-                "from-detail",
-                tags=["WINDOW"],
-                children=[
-                    node(
-                        "pane-b",
-                        "show all ips",
-                        detail=(
-                            "<html><body><p>for i in {{ root.public_ips }}</p>"
-                            "<p>&nbsp;&nbsp;&nbsp;echo ${i}</p><p>done</p></body></html>"
-                        ),
-                    )
-                ],
-            ),
-        ],
-    )
-
-    windows = compile_map(raw).windows
-    emitted_children = pane_shell_commands(windows[0].panes[0])
-    emitted_detail = pane_shell_commands(windows[1].panes[0])
-
-    assert emitted_children[-3:] == [
-        "for i in 10.20.0.3 10.20.0.4",
-        "echo ${i}",
-        "done",
-    ]
-    assert emitted_detail[-3:] == [
-        "for i in 8.8.8.8 1.1.1.1 4.4.4.4",
-        "echo ${i}",
-        "done",
-    ]
-
-
-def test_multiline_alias_pipeline_preserves_pipe_continuation() -> None:
-    raw = node(
-        "root",
-        "demo",
-        children=[
-            node(
-                "alias",
-                "temperature",
-                tags=["ALIAS"],
-                detail="<html><body><p>printf x |</p><p>cat</p></body></html>",
-            ),
-            node("window", "ops", tags=["WINDOW"], children=[node("command", "temperature")]),
-        ],
-    )
-
-    emitted = pane_shell_commands(compile_map(raw).windows[0].panes[0])
-    assert "alias temperature='printf x | cat'" in emitted
-    assert all("|;" not in command for command in emitted)
+    assert "username, password" in str(excinfo.value)

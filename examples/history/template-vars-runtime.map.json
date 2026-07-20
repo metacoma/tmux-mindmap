@@ -1,0 +1,98 @@
+{
+  "id": "root",
+  "text": "ops-demo",
+  "attributes": {
+    "var.region": "eu",
+    "env.PROJECT_DIR": "/srv/project"
+  },
+  "children": [
+    {
+      "id": "vars",
+      "text": "vars",
+      "children": [
+        {
+          "id": "credentials",
+          "text": "credentials",
+          "children": [
+            {
+              "id": "prod",
+              "text": "prod",
+              "children": [
+                {
+                  "id": "mysql",
+                  "text": "mysql",
+                  "attributes": {
+                    "username": "alice",
+                    "password": "secret"
+                  },
+                  "children": [
+                    {
+                      "id": "env1",
+                      "text": "env1",
+                      "attributes": {
+                        "env_name": "env1",
+                        "env_status": "OK"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ips",
+          "text": "ips",
+          "tags": [
+            "LIST"
+          ],
+          "children": [
+            {
+              "id": "ip1",
+              "text": "10.10.0.1"
+            },
+            {
+              "id": "ip2",
+              "text": "two words"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "window",
+      "text": "db",
+      "tags": [
+        "WINDOW"
+      ],
+      "attributes": {
+        "host": "db01",
+        "exec.pre": "echo pre {{ window.host }}"
+      },
+      "children": [
+        {
+          "id": "pane",
+          "text": "main",
+          "attributes": {
+            "database": "jira_cmdb"
+          },
+          "children": [
+            {
+              "id": "cmd1",
+              "text": "credentials",
+              "attributes": {
+                "db": "jira_cmdb_sam"
+              },
+              "detail": "echo {{ vars.credentials.prod.mysql.username }} {{ vars.credentials.prod.mysql.env1.env_status }} {{ region }} {{ env.PROJECT_DIR }} {{ window.host }} {{ pane.database }} {{ node.db }}"
+            },
+            {
+              "id": "cmd2",
+              "text": "ips",
+              "detail": "for i in {{ vars.ips }}; do printf \"%s\\n\" \"$i\"; done"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

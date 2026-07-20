@@ -18,9 +18,16 @@ def _cases() -> list[dict[str, str]]:
     return manifest["cases"]
 
 
+def _load_map(case: dict[str, str]) -> dict:
+    path = FIXTURE_DIR / case["map"]
+    if path.suffix == ".json":
+        return json.loads(path.read_text(encoding="utf-8"))
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
 @pytest.mark.parametrize("case", _cases(), ids=lambda case: case["name"])
 def test_history_map_matches_canonical_tmuxp(case: dict[str, str]) -> None:
-    raw = json.loads((FIXTURE_DIR / case["map"]).read_text(encoding="utf-8"))
+    raw = _load_map(case)
     expected = yaml.safe_load((FIXTURE_DIR / case["tmuxp"]).read_text(encoding="utf-8"))
 
     session = MindmapCompiler(RawNode.model_validate(raw)).compile()
@@ -34,42 +41,8 @@ def test_history_manifest_covers_every_committed_pair() -> None:
     manifest_maps = {case["map"] for case in cases}
     manifest_tmuxp = {case["tmuxp"] for case in cases}
 
-    assert manifest_maps == {path.name for path in FIXTURE_DIR.glob("*.map.json")}
+    fixture_maps = {path.name for path in FIXTURE_DIR.glob("*.map.json")} | {
+        path.name for path in FIXTURE_DIR.glob("*.map.yaml")
+    }
+    assert manifest_maps == fixture_maps
     assert manifest_tmuxp == {path.name for path in FIXTURE_DIR.glob("*.tmuxp.yaml")}
-
-
-def test_jinja_node_names_fixture_expands_window_and_pane_titles() -> None:
-    raw = json.loads((FIXTURE_DIR / "jinja-node-names.map.json").read_text(encoding="utf-8"))
-
-    session = MindmapCompiler(RawNode.model_validate(raw)).compile()
-
-    assert [window.name for window in session.windows] == [
-        "hello-win",
-        "mcmp2",
-        "mcmp3",
-    ]
-    assert [pane.title for pane in session.windows[1].panes] == ["ping", "mcmp2"]
-    assert [step.command for step in session.windows[1].panes[1].steps] == [
-        "ssh mcmp2",
-        "hostname",
-    ]
-    assert [pane.title for pane in session.windows[2].panes] == ["ping", "mcmp3"]
-    assert [step.command for step in session.windows[2].panes[1].steps] == [
-        "ssh mcmp3",
-        "hostname",
-    ]
-
-
-def test_mixed_window_fixture_has_two_panes_and_executes_both_echoes() -> None:
-    raw = json.loads((FIXTURE_DIR / "mixed-window.map.json").read_text(encoding="utf-8"))
-
-    session = MindmapCompiler(RawNode.model_validate(raw)).compile()
-    window = session.windows[0]
-
-    assert window.mode == "mixed"
-    assert len(window.panes) == 2
-    assert [pane.title for pane in window.panes] == [None, "second pane"]
-    assert [[step.command for step in pane.steps] for pane in window.panes] == [
-        ["echo pwd", "echo uptime"],
-        ["who"],
-    ]

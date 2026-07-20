@@ -1,0 +1,74 @@
+{
+  "id": "root",
+  "text": "relationships",
+  "children": [
+    {
+      "id": "vars",
+      "text": "vars",
+      "children": [
+        {
+          "id": "credentials",
+          "text": "credentials",
+          "children": [
+            {
+              "id": "prod",
+              "text": "prod",
+              "children": [
+                {
+                  "id": "mysql",
+                  "text": "mysql",
+                  "attributes": {
+                    "username": "alice",
+                    "password": "secret"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "window",
+      "text": "ops",
+      "tags": [
+        "WINDOW"
+      ],
+      "attributes": {
+        "tmux.mode": "single-pane",
+        "exec.pre": "echo window"
+      },
+      "children": [
+        {
+          "id": "pane",
+          "text": "mongo",
+          "attributes": {
+            "exec.pre": "echo pane"
+          },
+          "children": [
+            {
+              "id": "connect",
+              "text": "connect",
+              "relationship": "mongo-helper",
+              "attributes": {
+                "arg.username": "{{ vars.credentials.prod.mysql.username }}",
+                "arg.password": "{{ vars.credentials.prod.mysql.password }}",
+                "arg.db": "jira_cmdb_sam",
+                "exec.pre": "echo current"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mongo-helper",
+      "text": "mongo-helper",
+      "attributes": {
+        "default.auth_source": "admin",
+        "exec.pre": "echo helper"
+      },
+      "detail": "mongosh 'mongodb://{{ args.username }}:{{ args.password }}@host/?authSource={{ args.auth_source }}&db={{ args.db }}'"
+    }
+  ]
+}

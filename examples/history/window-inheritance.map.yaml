@@ -1,0 +1,37 @@
+id: root
+text: playground
+attributes:
+  var.mgmt: mgmt.example.invalid
+children:
+- id: base-window
+  text: mcmp2
+  tags:
+  - WINDOW
+  children:
+  - id: base-pane1
+    text: pane1
+    attributes:
+      exec.pre: ssh hw0076
+    children:
+    - id: base-cmd1
+      text: ping
+      detail: ping {{ window.name }}.{{ mgmt }}
+  - id: base-pane2
+    text: pane2
+    children:
+    - id: base-cmd2
+      text: ssh
+      detail: ssh {{ window.name }}
+- id: derived-window
+  text: mcmp3
+  tags:
+  - WINDOW
+  relationships:
+  - target_id: base-window
+  children:
+  - id: extra-pane
+    text: additional pane
+    children:
+    - id: extra-cmd
+      text: echo
+      detail: echo {{ pane.name }}

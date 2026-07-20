@@ -1,18 +1,19 @@
 {
-  "text": "tmux",
-  "id": "ID_ROOT",
+  "id": "root",
+  "text": "demo",
   "children": [
     {
+      "id": "window",
       "text": "hello-win",
-      "id": "ID_WINDOW",
-      "children": [
-        {
-          "text": "echo hello world",
-          "id": "ID_COMMAND"
-        }
-      ],
       "tags": [
         "WINDOW"
+      ],
+      "children": [
+        {
+          "id": "cmd",
+          "text": "hello",
+          "detail": "echo hello world"
+        }
       ]
     }
   ]

@@ -2,23 +2,66 @@ from __future__ import annotations
 
 import re
 import shlex
+from collections import OrderedDict
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from .errors import SemanticError
 from .models import AliasTemplate, RawNode, ScopeLayer, ScopeSnapshot
-from .templates import (
-    TEMPLATE_RE,
-    ShellList,
-    render_template,
-    require_resolved,
-    stringify_shell_value,
-    stringify_template_value,
-)
+from .templates import TEMPLATE_RE, ShellList
 from .text import join_shell_commands, sanitize_details_text, split_shell_commands
 
-ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
-_SIMPLE_LIST_TOKEN_RE = re.compile(r"^[A-Za-z0-9._:/@%+=,-]+$")
+_TEMPLATE_SEGMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_RESERVED_SCOPED_NAMES = {
+    "args",
+    "env",
+    "false",
+    "node",
+    "none",
+    "pane",
+    "root",
+    "scoped",
+    "script1",
+    "session",
+    "true",
+    "vars",
+    "window",
+}
+_SERVICE_ATTRIBUTE_NAMES = {
+    "exec.pre",
+    "exec.pre_mode",
+    "exec.workdir",
+    "script1",
+    "tmux.layout",
+    "tmux.mode",
+}
+
+
+@dataclass(frozen=True)
+class RawScalarTemplate:
+    path: str
+    template: str
+
+
+@dataclass(frozen=True)
+class RawListTemplate:
+    path: str
+    items: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CompiledVarsNamespace:
+    scalars: dict[str, RawScalarTemplate]
+    lists: dict[str, RawListTemplate]
+    object_fields: dict[str, tuple[str, ...]]
+
+
+@dataclass(frozen=True)
+class RuntimeTemplateContext:
+    scalars: dict[str, str]
+    object_fields: dict[str, tuple[str, ...]]
 
 
 def to_string(value: Any) -> str:
@@ -29,205 +72,281 @@ def to_string(value: Any) -> str:
     return str(value)
 
 
+def _validate_template_segment(segment: str, *, kind: str, path: str) -> None:
+    if not _TEMPLATE_SEGMENT_RE.fullmatch(segment):
+        raise SemanticError(
+            f"invalid {kind} name {segment!r} at {path}; use [A-Za-z_][A-Za-z0-9_]*"
+        )
+
+
+def _validate_env_name(name: str) -> None:
+    if not _ENV_NAME_RE.fullmatch(name):
+        raise SemanticError(
+            f"invalid environment variable name {name!r}; use [A-Za-z_][A-Za-z0-9_]*"
+        )
+
+
+def _merge_object_fields(*mappings: dict[str, tuple[str, ...]]) -> dict[str, tuple[str, ...]]:
+    merged: dict[str, OrderedDict[str, None]] = {}
+    for mapping in mappings:
+        for path, fields in mapping.items():
+            bucket = merged.setdefault(path, OrderedDict())
+            for field in fields:
+                bucket.setdefault(field, None)
+    return {path: tuple(fields.keys()) for path, fields in merged.items()}
+
+
 def split_attributes(attributes: dict[str, Any]) -> ScopeLayer:
-    vars_out: dict[str, str] = {}
+    scoped_vars: dict[str, str] = {}
     env_out: dict[str, str] = {}
     pre_out: list[str] = []
+    runtime_attrs: dict[str, str] = {}
+    call_args: dict[str, str] = {}
+    helper_defaults: dict[str, str] = {}
+    tmux_mode: str | None = None
+    tmux_layout: str | None = None
 
     for key, raw_value in attributes.items():
         value = to_string(raw_value)
-        if key == "pre":
+        if key == "script1":
+            continue
+        if key == "exec.pre":
             pre_out.extend(split_shell_commands(value))
-        elif ENV_NAME_RE.fullmatch(key):
-            env_out[key] = value
-        else:
-            vars_out[key] = value
+            continue
+        if key == "exec.pre_mode":
+            if value and value != "append":
+                raise SemanticError(
+                    f"unsupported exec.pre_mode {value!r}; only append semantics are supported"
+                )
+            continue
+        if key == "exec.workdir":
+            continue
+        if key == "tmux.mode":
+            tmux_mode = value or None
+            continue
+        if key == "tmux.layout":
+            tmux_layout = value or None
+            continue
+        if key.startswith("var."):
+            name = key.removeprefix("var.")
+            _validate_template_segment(name, kind="scoped variable", path=key)
+            if name in _RESERVED_SCOPED_NAMES:
+                raise SemanticError(f'Scoped variable name "{name}" is reserved')
+            scoped_vars[name] = value
+            continue
+        if key.startswith("env."):
+            name = key.removeprefix("env.")
+            _validate_env_name(name)
+            env_out[name] = value
+            continue
+        if key.startswith("arg."):
+            name = key.removeprefix("arg.")
+            _validate_template_segment(name, kind="argument", path=key)
+            call_args[name] = value
+            continue
+        if key.startswith("default."):
+            name = key.removeprefix("default.")
+            _validate_template_segment(name, kind="default argument", path=key)
+            helper_defaults[name] = value
+            continue
+        if key == "type" and value == "list":
+            continue
+        runtime_attrs[key] = value
 
-    return ScopeLayer(vars=vars_out, env=env_out, pre=tuple(pre_out))
+    return ScopeLayer(
+        scoped_vars=scoped_vars,
+        env=env_out,
+        pre=tuple(pre_out),
+        runtime_attrs=runtime_attrs,
+        call_args=call_args,
+        helper_defaults=helper_defaults,
+        tmux_mode=tmux_mode,
+        tmux_layout=tmux_layout,
+    )
 
 
 def combine_layer(base: ScopeLayer, *, aliases: dict[str, AliasTemplate]) -> ScopeLayer:
-    return ScopeLayer(vars=base.vars, env=base.env, pre=base.pre, aliases=aliases)
+    return ScopeLayer(
+        scoped_vars=base.scoped_vars,
+        env=base.env,
+        pre=base.pre,
+        aliases=aliases,
+        runtime_attrs=base.runtime_attrs,
+        call_args=base.call_args,
+        helper_defaults=base.helper_defaults,
+        tmux_mode=base.tmux_mode,
+        tmux_layout=base.tmux_layout,
+    )
+
+
+class _TemplateLookupError(SemanticError):
+    pass
 
 
 class ScopeResolver:
     """Resolve a path-scoped stack at the exact command call site."""
 
-    def __init__(self, root_node: RawNode | None = None):
-        self.root_node = root_node
-
-    @staticmethod
-    def _parse_detail_list(value: str) -> tuple[str, ...] | None:
-        text = sanitize_details_text(value).strip()
-        if not text:
-            return None
-
-        nonempty_lines = [line.strip() for line in text.splitlines() if line.strip()]
-        if len(nonempty_lines) > 1:
-            items: list[str] = []
-            for line in nonempty_lines:
-                try:
-                    parts = shlex.split(line, posix=True)
-                except ValueError:
-                    return None
-                if len(parts) != 1:
-                    return None
-                items.extend(parts)
-            return tuple(items) if len(items) > 1 else None
-
-        try:
-            parts = tuple(shlex.split(text, posix=True))
-        except ValueError:
-            return None
-        if len(parts) <= 1:
-            return None
-
-        if "'" in text or '"' in text:
-            return parts
-
-        if all(_SIMPLE_LIST_TOKEN_RE.fullmatch(part) for part in parts) and any(
-            re.search(r"[0-9._:/@%+=,-]", part) for part in parts
-        ):
-            return parts
-        return None
+    def __init__(self, compiled_vars: CompiledVarsNamespace):
+        self.compiled_vars = compiled_vars
 
     def resolve(
         self,
         layers: Sequence[ScopeLayer],
         *,
-        builtins: dict[str, str],
+        runtime_context: RuntimeTemplateContext,
+        args_namespace: dict[str, str] | None,
         strict: bool,
         subject: str,
     ) -> ScopeSnapshot:
-        raw_vars: dict[str, str] = {}
+        raw_scoped: dict[str, str] = {}
         raw_env: dict[str, str] = {}
         raw_pre: list[str] = []
         raw_aliases: dict[str, AliasTemplate] = {}
 
         for layer in layers:
-            raw_vars.update(layer.vars)
+            raw_scoped.update(layer.scoped_vars)
             raw_env.update(layer.env)
             raw_pre.extend(layer.pre)
             raw_aliases.update(layer.aliases)
 
-        namespace_raw: dict[str, str] = {**raw_vars, **raw_env, **builtins}
-        resolved_namespace: dict[str, str] = {}
-        resolving: list[str] = []
-        node_value_cache: dict[str, str | ShellList] = {}
-        node_value_resolving: list[str] = []
+        raw_scalars: dict[str, RawScalarTemplate] = dict(self.compiled_vars.scalars)
+        raw_lists: dict[str, RawListTemplate] = dict(self.compiled_vars.lists)
+        object_fields = _merge_object_fields(
+            self.compiled_vars.object_fields, runtime_context.object_fields
+        )
 
-        def resolve_node_value(node: RawNode) -> str | ShellList:
-            cached = node_value_cache.get(node.id)
-            if cached is not None:
-                return cached
-            if node.id in node_value_resolving:
-                cycle = " -> ".join([*node_value_resolving, node.id])
-                raise SemanticError(f"cyclic root template reference: {cycle}")
-
-            node_value_resolving.append(node.id)
-            try:
-                if node.children:
-                    items: list[str] = []
-                    for child in node.children:
-                        child_value = resolve_node_value(child)
-                        if isinstance(child_value, ShellList):
-                            items.extend(child_value.items)
-                        else:
-                            items.append(child_value)
-                    result: str | ShellList = ShellList(tuple(items))
-                elif node.detail is not None and node.detail.strip():
-                    clean_detail = sanitize_details_text(node.detail)
-                    rendered_detail = render_template(
-                        clean_detail,
-                        lookup_value,
-                        stringify=stringify_template_value,
-                    )
-                    parsed_list = self._parse_detail_list(rendered_detail)
-                    result = ShellList(parsed_list) if parsed_list is not None else rendered_detail
-                else:
-                    result = render_template(
-                        node.text,
-                        lookup_value,
-                        stringify=stringify_template_value,
-                    )
-            finally:
-                node_value_resolving.pop()
-
-            node_value_cache[node.id] = result
-            return result
-
-        def resolve_root_key(key: str) -> str | ShellList | None:
-            if self.root_node is None or not (key == "root" or key.startswith("root.")):
-                return None
-            if key == "root":
-                return resolve_node_value(self.root_node)
-
-            current = self.root_node
-            for segment in key.split(".")[1:]:
-                match = next((child for child in current.children if child.text == segment), None)
-                if match is None:
-                    return None
-                current = match
-            return resolve_node_value(current)
-
-        def lookup_value(key: str) -> str | ShellList | None:
-            root_value = resolve_root_key(key)
-            if root_value is not None:
-                return root_value
-            if key in resolved_namespace:
-                return resolved_namespace[key]
-            if key not in namespace_raw:
-                return None
-            if key in resolving:
-                cycle = " -> ".join([*resolving, key])
-                raise SemanticError(f"cyclic template reference: {cycle}")
-
-            resolving.append(key)
-            rendered = render_template(
-                namespace_raw[key],
-                lookup_value,
-                stringify=stringify_template_value,
+        for name, value in raw_scoped.items():
+            raw_scalars[name] = RawScalarTemplate(path=name, template=value)
+        if raw_env:
+            object_fields = _merge_object_fields(object_fields, {"env": tuple(raw_env.keys())})
+            for name, value in raw_env.items():
+                raw_scalars[f"env.{name}"] = RawScalarTemplate(path=f"env.{name}", template=value)
+        if args_namespace:
+            object_fields = _merge_object_fields(
+                object_fields, {"args": tuple(args_namespace.keys())}
             )
-            resolving.pop()
-            resolved_namespace[key] = rendered
-            return rendered
+            for name, value in args_namespace.items():
+                raw_scalars[f"args.{name}"] = RawScalarTemplate(path=f"args.{name}", template=value)
+        else:
+            object_fields = _merge_object_fields(object_fields, {"args": ()})
 
-        for key in namespace_raw:
-            value = lookup_value(key)
-            if isinstance(value, str):
-                resolved_namespace[key] = value
+        for path, value in runtime_context.scalars.items():
+            raw_scalars[path] = RawScalarTemplate(path=path, template=value)
 
-        vars_out = {
-            key: value
-            for key in (*raw_vars.keys(), *builtins.keys())
-            if (value := resolved_namespace.get(key)) is not None and not TEMPLATE_RE.search(value)
-        }
+        resolved_scalars: dict[str, str] = {}
+        resolved_lists: dict[str, tuple[str, ...]] = {}
+        resolving: list[str] = []
+
+        def describe_available(path: str) -> str:
+            fields = object_fields.get(path, ())
+            if not fields:
+                return f"No fields are available under {path}."
+            joined = ", ".join(fields)
+            return f"Available fields under {path}: {joined}"
+
+        def missing_key_error(path: str) -> _TemplateLookupError:
+            parts = path.split(".")
+            prefix = parts[0]
+            if (
+                prefix not in object_fields
+                and prefix not in raw_scalars
+                and prefix not in raw_lists
+            ):
+                top_level = sorted(
+                    {
+                        *object_fields.keys(),
+                        *(name for name in raw_scalars if "." not in name),
+                        *(name for name in raw_lists if "." not in name),
+                    }
+                )
+                joined = ", ".join(top_level)
+                message = (
+                    f'{subject}: undefined template variable "{path}". '
+                    f"Available top-level names: {joined}"
+                )
+                return _TemplateLookupError(message)
+
+            current = prefix
+            for segment in parts[1:]:
+                if current in raw_scalars or current in raw_lists:
+                    return _TemplateLookupError(
+                        f'{subject}: undefined template variable "{path}". '
+                        f"Path prefix {current} is not an object value."
+                    )
+                fields = object_fields.get(current)
+                if fields is None:
+                    break
+                if segment not in fields:
+                    return _TemplateLookupError(
+                        f'{subject}: undefined template variable "{path}". '
+                        f"{describe_available(current)}"
+                    )
+                current = f"{current}.{segment}"
+            return _TemplateLookupError(f'{subject}: undefined template variable "{path}".')
+
+        def resolve_path(path: str) -> str | ShellList:
+            if path in resolved_scalars:
+                return resolved_scalars[path]
+            if path in resolved_lists:
+                return ShellList(resolved_lists[path])
+            if path in object_fields and path not in raw_scalars and path not in raw_lists:
+                raise _TemplateLookupError(
+                    f"{subject}: Cannot render object {path} as a scalar value. "
+                    f"{describe_available(path)}"
+                )
+            if path in resolving:
+                cycle = " -> ".join([*resolving, path])
+                raise SemanticError(f"cyclic template reference: {cycle}")
+            if path in raw_scalars:
+                resolving.append(path)
+                try:
+                    rendered = self._render_template(
+                        raw_scalars[path].template,
+                        resolve_path,
+                        stringify=stringify_template_value,
+                    )
+                finally:
+                    resolving.pop()
+                resolved_scalars[path] = rendered
+                return rendered
+            if path in raw_lists:
+                resolving.append(path)
+                try:
+                    items = tuple(
+                        self._render_template(
+                            item, resolve_path, stringify=stringify_template_value
+                        )
+                        for item in raw_lists[path].items
+                    )
+                finally:
+                    resolving.pop()
+                resolved_lists[path] = items
+                return ShellList(items)
+            raise missing_key_error(path)
+
         env_out = {
-            key: value
-            for key in raw_env
-            if (value := resolved_namespace.get(key)) is not None and not TEMPLATE_RE.search(value)
+            name: self._render_template(template, resolve_path, stringify=stringify_template_value)
+            for name, template in raw_env.items()
         }
 
-        def lookup(key: str) -> str | ShellList | None:
-            root_value = resolve_root_key(key)
-            if root_value is not None:
-                return root_value
-            value = resolved_namespace.get(key)
-            if value is None or TEMPLATE_RE.search(value):
-                return None
+        def late_lookup(path: str) -> str | ShellList:
+            value = resolve_path(path)
+            if isinstance(value, ShellList):
+                return value
             return value
 
         pre_out: list[str] = []
-        for index, command_template in enumerate(raw_pre):
-            rendered = render_template(
-                command_template,
-                lookup,
-                stringify=stringify_shell_value,
-            )
-            if TEMPLATE_RE.search(rendered):
-                if strict:
-                    require_resolved(rendered, subject=f"pre command {index + 1} for {subject}")
-                continue
+        for _index, command_template in enumerate(raw_pre):
+            try:
+                rendered = self._render_template(
+                    command_template,
+                    late_lookup,
+                    stringify=stringify_shell_value,
+                )
+            except _TemplateLookupError as exc:
+                if not strict:
+                    continue
+                raise SemanticError(str(exc)) from None
             pre_out.extend(split_shell_commands(rendered))
 
         aliases_out: dict[str, str] = {}
@@ -235,43 +354,196 @@ class ScopeResolver:
             rendered_lines: list[str] = []
             unresolved = False
             for command_template in alias_template.command_templates:
-                rendered = render_template(
-                    command_template,
-                    lookup,
-                    stringify=stringify_shell_value,
-                )
-                if TEMPLATE_RE.search(rendered):
+                try:
+                    rendered = self._render_template(
+                        command_template,
+                        late_lookup,
+                        stringify=stringify_shell_value,
+                    )
+                except _TemplateLookupError as exc:
                     unresolved = True
                     if strict:
-                        require_resolved(
-                            rendered,
-                            subject=(
-                                f"alias {name!r} from node {alias_template.source_node_id!r} "
-                                f"for {subject}"
-                            ),
-                        )
+                        raise SemanticError(str(exc)) from None
                     break
                 rendered_lines.extend(split_shell_commands(rendered))
             if not unresolved and rendered_lines:
                 aliases_out[name] = join_shell_commands(rendered_lines)
 
+        visible_scalars = dict(resolved_scalars)
+        visible_scalars.update({f"env.{name}": value for name, value in env_out.items()})
+
         return ScopeSnapshot(
-            vars=vars_out,
+            vars=visible_scalars,
+            lists=dict(resolved_lists),
+            object_fields=object_fields,
             env=env_out,
             pre=tuple(pre_out),
             aliases=aliases_out,
-            root_lookup=resolve_root_key,
+            lookup_value=resolve_path,
         )
 
     def render_value(self, template: str, scope: ScopeSnapshot, *, subject: str) -> str:
-        rendered = render_template(template, scope.lookup, stringify=stringify_template_value)
-        return require_resolved(rendered, subject=subject)
+        return self._render_template(
+            template,
+            lambda path: self._resolve_from_snapshot(path, scope, subject=subject),
+            stringify=stringify_template_value,
+        )
 
     def render_command_block(self, template: str, scope: ScopeSnapshot, *, subject: str) -> str:
         cleaned = sanitize_details_text(template)
-        rendered = render_template(cleaned, scope.lookup, stringify=stringify_shell_value)
-        return require_resolved(rendered, subject=subject)
+        return self._render_template(
+            cleaned,
+            lambda path: self._resolve_from_snapshot(path, scope, subject=subject),
+            stringify=stringify_shell_value,
+        )
 
     def render_command(self, template: str, scope: ScopeSnapshot, *, subject: str) -> list[str]:
         rendered = self.render_command_block(template, scope, subject=subject)
         return split_shell_commands(rendered)
+
+    @staticmethod
+    def _render_template(
+        value: str,
+        lookup: Any,
+        *,
+        max_passes: int = 64,
+        stringify: Any,
+    ) -> str:
+        rendered = value
+        for _ in range(max_passes):
+            changed = False
+
+            def replace(match: re.Match[str]) -> str:
+                nonlocal changed
+                key = match.group(1).strip()
+                replacement = lookup(key)
+                replacement_text = stringify(replacement)
+                if replacement_text != match.group(0):
+                    changed = True
+                return replacement_text
+
+            rendered = TEMPLATE_RE.sub(replace, rendered)
+            if not changed:
+                return rendered
+        raise SemanticError(f"template exceeded {max_passes} render passes: {value!r}")
+
+    def _resolve_from_snapshot(
+        self,
+        path: str,
+        scope: ScopeSnapshot,
+        *,
+        subject: str,
+    ) -> str | ShellList:
+        if path in scope.vars:
+            return scope.vars[path]
+        if path in scope.lists:
+            return ShellList(scope.lists[path])
+        if scope.lookup_value is not None:
+            value = scope.lookup_value(path)
+            if value is not None:
+                if isinstance(value, tuple):
+                    return ShellList(value)
+                return value
+        if path in scope.object_fields:
+            fields = ", ".join(scope.object_fields[path])
+            message = (
+                f"{subject}: Cannot render object {path} as a scalar value. "
+                f"Available fields: {fields}"
+            )
+            raise SemanticError(message)
+        raise SemanticError(f'{subject}: undefined template variable "{path}"')
+
+
+def stringify_template_value(value: Any) -> str:
+    if isinstance(value, ShellList):
+        return " ".join(value.items)
+    if isinstance(value, tuple):
+        return " ".join(value)
+    return str(value)
+
+
+def stringify_shell_value(value: Any) -> str:
+    if isinstance(value, ShellList):
+        return " ".join(shlex.quote(item) for item in value.items)
+    if isinstance(value, tuple):
+        return " ".join(shlex.quote(item) for item in value)
+    return str(value)
+
+
+def compile_vars_namespace(root: RawNode) -> CompiledVarsNamespace:
+    vars_nodes = [child for child in root.children if child.text == "vars"]
+    if not vars_nodes:
+        return CompiledVarsNamespace(scalars={}, lists={}, object_fields={})
+    if len(vars_nodes) > 1:
+        raise SemanticError("multiple root children named 'vars' are not allowed")
+
+    scalars: dict[str, RawScalarTemplate] = {}
+    lists: dict[str, RawListTemplate] = {}
+    object_fields: dict[str, tuple[str, ...]] = {}
+
+    def compile_object(node: RawNode, path: str) -> None:
+        explicit_list = "LIST" in node.tags or node.attributes.get("type") == "list"
+        if explicit_list:
+            compile_list(node, path)
+            return
+
+        user_attrs = OrderedDict()
+        for key, raw_value in node.attributes.items():
+            if key in {"type", *sorted(_SERVICE_ATTRIBUTE_NAMES)}:
+                continue
+            _validate_template_segment(key, kind="vars attribute", path=f"{path}.{key}")
+            user_attrs[key] = to_string(raw_value)
+
+        children_by_name: OrderedDict[str, RawNode] = OrderedDict()
+        for child in node.children:
+            child_name = child.text
+            _validate_template_segment(child_name, kind="vars field", path=f"{path}.{child_name}")
+            if child_name in children_by_name:
+                raise SemanticError(f"Duplicate variable path: {path}.{child_name}")
+            children_by_name[child_name] = child
+
+        conflicts = sorted(set(user_attrs).intersection(children_by_name))
+        if conflicts:
+            conflict_path = f"{path}.{conflicts[0]}"
+            message = (
+                f"Duplicate variable path: {conflict_path}. "
+                "Defined both as an attribute and as a child node"
+            )
+            raise SemanticError(message)
+
+        if not user_attrs and not children_by_name:
+            if node.detail is None or not sanitize_details_text(node.detail).strip():
+                raise SemanticError(f"Variable {path} has no value")
+            scalars[path] = RawScalarTemplate(
+                path=path, template=sanitize_details_text(node.detail)
+            )
+            return
+
+        object_fields[path] = tuple([*user_attrs.keys(), *children_by_name.keys()])
+        for key, value in user_attrs.items():
+            child_path = f"{path}.{key}"
+            scalars[child_path] = RawScalarTemplate(path=child_path, template=value)
+        for child_name, child in children_by_name.items():
+            compile_object(child, f"{path}.{child_name}")
+
+    def compile_list(node: RawNode, path: str) -> None:
+        if node.detail and sanitize_details_text(node.detail).strip():
+            raise SemanticError(f"Explicit list {path} must use child items, not detail text")
+        items: list[str] = []
+        for child in node.children:
+            if child.children:
+                raise SemanticError(
+                    f"Explicit list {path} cannot contain nested objects at item {child.id!r}"
+                )
+            item_value = sanitize_details_text(child.detail) if child.detail else child.text
+            if not item_value.strip():
+                raise SemanticError(
+                    f"Explicit list {path} contains an empty item at node {child.id!r}"
+                )
+            items.append(item_value)
+        lists[path] = RawListTemplate(path=path, items=tuple(items))
+
+    compile_object(vars_nodes[0], "vars")
+    if "vars" not in object_fields:
+        object_fields["vars"] = ()
+    return CompiledVarsNamespace(scalars=scalars, lists=lists, object_fields=object_fields)

@@ -1,19 +1,5 @@
 session_name: playground
 windows:
-- window_name: kubernetes info
-  layout: main-horizontal
-  options:
-    pane-border-status: top
-    pane-border-format: '#{pane_index}: #{pane_title}'
-  panes:
-  - shell_command:
-    - printf '\033]2;%s\033\\' nodes
-    - ssh hw0076
-    - kubectl get nodes
-  - shell_command:
-    - printf '\033]2;%s\033\\' events
-    - ssh hw0076
-    - kubectl get events -W --all-namespaces
 - window_name: mcmp2
   layout: main-horizontal
   options:
@@ -23,7 +9,7 @@ windows:
   - shell_command:
     - printf '\033]2;%s\033\\' pane1
     - ssh hw0076
-    - ping mcmp2.mgmt.mansion.shitcluster.io
+    - ping mcmp2.mgmt.example.invalid
   - shell_command:
     - printf '\033]2;%s\033\\' pane2
     - ssh mcmp2
@@ -36,12 +22,10 @@ windows:
   - shell_command:
     - printf '\033]2;%s\033\\' pane1
     - ssh hw0076
-    - ping mcmp3.mgmt.mansion.shitcluster.io
+    - ping mcmp3.mgmt.example.invalid
   - shell_command:
     - printf '\033]2;%s\033\\' pane2
     - ssh mcmp3
   - shell_command:
-    - additional command
-  - shell_command:
     - printf '\033]2;%s\033\\' 'additional pane'
-    - echo "additional pane"
+    - echo additional pane

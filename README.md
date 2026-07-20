@@ -2,21 +2,27 @@
 
 Generate reproducible [`tmuxp`](https://github.com/tmux-python/tmuxp) sessions from a Freeplane mindmap exported through [`metacoma/freeplane_plugin_grpc`](https://github.com/metacoma/freeplane_plugin_grpc).
 
-The project treats the mindmap as a small declarative execution language: `WINDOW` nodes define tmux windows, command trees define pane startup sequences, relationships call reusable command subtrees, and path-scoped attributes provide variables, environment, `pre` commands, and shell aliases.
+The compiler treats the map as a small declarative execution language:
+
+- `WINDOW` nodes define tmux windows.
+- Window children define implicit command runs or explicit panes.
+- Relationships call reusable helper subtrees or inherit another `WINDOW`.
+- Templates are resolved with a strict, explicit namespace model.
 
 ## Features
 
-- Uses the **map root** as the tmux session root.
-- Supports explicit `single implicit pane`, `pane list`, and ordered mixed-window plans.
-- Supports relationship calls to both leaf commands and composite function subtrees.
-- Supports WINDOW-to-WINDOW inheritance with ordered last-wins pane replacement.
-- Resolves helper relationship targets in the call-site context and inherited panes in the derived-window context.
-- Provides path-scoped template variables, `window.*` / `pane.*` object fields, and environment inheritance.
-- Accumulates `pre` commands instead of overwriting them.
-- Supports scoped `ALIAS` declarations with late template resolution.
-- Rebuilds environment and aliases when an interactive command changes shell context through `ssh` or `sudo`.
-- Fetches Freeplane details through its canonical plain-text API, with centralized fallback
-  sanitation for local and legacy exports.
+- Strict template resolution with helpful undefined-variable errors.
+- Explicit global `vars.*` namespace built from the root child `vars`.
+- Object-style runtime namespaces: `session.*`, `window.*`, `pane.*`, `node.*`, `env.*`, `args.*`.
+- Explicit scoped variables via `var.*`.
+- Explicit environment variables via `env.*`.
+- Explicit helper arguments via `arg.*` and helper defaults via `default.*`.
+- Explicit list values via `LIST` tags or `type: list`.
+- Ordered `exec.pre` accumulation across root, window, pane, command, and helper scopes.
+- Scoped `ALIAS` declarations with late resolution.
+- Automatic alias / environment bootstrap through `ssh` and interactive `sudo` transitions.
+- Root `exec.workdir` emitted as tmuxp `start_directory`.
+- Root `script1` preserved in map dumps but excluded from template context.
 
 ## Requirements
 
@@ -25,9 +31,7 @@ For the standalone release binary:
 - Linux x86_64 with glibc compatible with Ubuntu 22.04 or newer
 - `tmux`
 - Freeplane with `freeplane_plugin_grpc` installed and running
-- Python is **not** required for the standalone binary. `tmuxp`, grpcio, Protobuf,
-Pydantic, PyYAML, bundled Freeplane gRPC stubs, and their Python runtime are embedded
-into the executable.
+- Python is **not** required
 
 For installation from source:
 
@@ -35,38 +39,6 @@ For installation from source:
 - Python 3.10+
 - Freeplane with `freeplane_plugin_grpc` installed and running
 - Bash on hosts where alias/bootstrap context is used
-
-When installed from source, `tmuxp`, `grpcio`, Pydantic, Protobuf, PyYAML, and the
-bundled Freeplane gRPC stubs are installed as Python package contents.
-
-## Standalone Linux binary
-
-Every tag matching `v*` runs `.github/workflows/release-binary.yml`. The workflow
-builds one `freeplane-tmux-linux-x86_64` executable with PyInstaller, runs the
-full tests and a frozen-binary smoke test, then attaches that executable directly
-to the corresponding GitHub Release. A manual `workflow_dispatch` run builds the
-same downloadable Actions artifact without creating a release.
-
-Install a released binary without Python:
-
-```bash
-chmod +x freeplane-tmux-linux-x86_64
-sudo install -m 0755 freeplane-tmux-linux-x86_64 /usr/local/bin/freeplane-tmux
-freeplane-tmux --help
-```
-
-Create a release:
-
-```bash
-git tag -a v0.1.0 -m "v0.1.0"
-git push origin v0.1.0
-```
-
-The executable is intentionally Linux x86_64 only, so the release contains one
-binary rather than a platform matrix. `tmux` remains an external system
-dependency; the Python implementation of tmuxp is embedded and `--load` does not
-look for a separate `tmuxp` executable. The project pins the tmuxp 1.74 minor
-line because the bundled integration calls its Python CLI directly.
 
 ## Installation
 
@@ -76,23 +48,28 @@ cd freeplane-tmux
 python3 -m pip install .
 ```
 
-Install the Freeplane plugin from `metacoma/freeplane_plugin_grpc`. No external Python stubs are needed anymore; the project bundles the required gRPC modules into both the wheel and the standalone binary.
+Install the Freeplane plugin from `metacoma/freeplane_plugin_grpc`.
+
+## Standalone Linux binary
+
+Every tag matching `v*` runs `.github/workflows/release-binary.yml`. The workflow builds one `freeplane-tmux-linux-x86_64` executable with PyInstaller, runs tests and a frozen-binary smoke test, then uploads that executable to the GitHub Release.
+
+Install a released binary without Python:
+
+```bash
+chmod +x freeplane-tmux-linux-x86_64
+sudo install -m 0755 freeplane-tmux-linux-x86_64 /usr/local/bin/freeplane-tmux
+freeplane-tmux --help
+```
 
 ## Direct GUI terminal launch from `script1`
 
-`--create` and `--create-map` generate a map-local root `script1`. The script
-contains two precomputed argument lists:
+`--create` / `--create-map` generate a root `script1` attribute containing the Groovy launcher used by Freeplane. `script1` is a service attribute:
 
-1. the complete GUI terminal command;
-2. the `freeplane-tmux --load` command, including the selected gRPC address and
-   timeout.
-
-When the root script runs, Groovy verifies `DISPLAY`/`WAYLAND_DISPLAY`, checks the
-terminal and runtime executables, concatenates both lists, and starts the final
-command with `ProcessBuilder.start()`. It does not call a shell launcher, hidden
-CLI mode, or an intermediate `freeplane-tmux` process. The terminal starts the
-single runtime process that performs export, compilation, YAML emission, and
-`tmuxp load`.
+- it stays in the dumped map JSON;
+- it is **not** a template variable;
+- it is **not** inherited;
+- it is **not** published through `vars`, `session`, `window`, `pane`, `node`, `env`, or `args`.
 
 `--create-terminal` accepts the complete terminal command:
 
@@ -107,27 +84,6 @@ If omitted, the generated script uses:
 ```bash
 x-terminal-emulator -e
 ```
-
-The Groovy process is launched in the background and writes terminal-startup
-errors to `$XDG_RUNTIME_DIR/freeplane-tmux.log` (or `/tmp/freeplane-tmux.log`).
-
-## Create a new Freeplane map
-
-Create a new unsaved map in the running Freeplane instance:
-
-```bash
-freeplane-tmux \
-  --addr 127.0.0.1:50051 \
-  --create-map Operations \
-  --create-terminal "gnome-terminal --"
-```
-
-`--create Operations` is an exact alias for `--create-map Operations`.
-
-The new map name and root-node text are set to `Operations`. The root receives
-the generated `script1`. The starter branch contains `hello-win` tagged
-`WINDOW`, with the child command `echo hello world`. Map creation exits without
-exporting or loading the session.
 
 ## Usage
 
@@ -157,13 +113,13 @@ freeplane-tmux \
   --yaml-out /tmp/demo.tmuxp.yaml
 ```
 
-Dump the complete live map to stdout without compiling or writing files:
+Dump the complete live map to stdout without compiling:
 
 ```bash
 freeplane-tmux --dump --pretty
 ```
 
-Dump the currently selected node and its complete descendant subtree as a standalone JSON root:
+Dump the currently selected node and its descendant subtree as a standalone JSON root:
 
 ```bash
 freeplane-tmux --dump-from-node --pretty
@@ -192,175 +148,267 @@ Current CLI surface:
 
 ### Session and windows
 
-The map root supplies `session_name`. The compiler finds top-level nodes tagged `WINDOW`; a nested `WINDOW` inside another window is not treated as a second session window.
+The map root supplies `session_name`. The compiler finds top-level nodes tagged `WINDOW`; a nested `WINDOW` inside another window does not create another tmux session window.
 
-Set a `workdir` attribute on the map root to start the tmuxp session in that directory:
+Set `exec.workdir` on the map root to emit tmuxp `start_directory`:
 
 ```text
-workdir = /srv/project
+exec.workdir = /srv/project
 ```
-
-The value supports the same `{{ name }}` template expansion as commands and node names. It is emitted as tmuxp's top-level `start_directory`, so every window and pane inherits it unless a future more specific directory setting overrides it. Only the map-root `workdir` controls the session directory; attributes with that name on descendant nodes remain ordinary scoped variables.
 
 A `WINDOW` body is parsed as an ordered sequence of command runs and pane declarations:
 
 - consecutive plain leaf children are commands in one unnamed implicit pane;
 - a child with children, `detail`, relationships, or a `PANE` tag declares a separate pane;
-- command runs and declared panes keep their order, so mixed windows are supported directly.
+- command runs and declared panes keep their order.
 
-This is a local node grammar rather than a global all-or-nothing window heuristic. The
-`COMMAND` tag forces an otherwise structured child into the current implicit command run;
-the `PANE` tag explicitly declares a pane, including an empty named pane. A node cannot carry
-both tags.
-
-The behavior can still be forced for the complete window with an attribute:
+You can force the whole window with:
 
 ```text
-window-mode = single-pane
+tmux.mode = single-pane
 ```
 
 or:
 
 ```text
-window-mode = pane-list
+tmux.mode = pane-list
+```
+
+Per-window layout can be set with:
+
+```text
+tmux.layout = main-horizontal
 ```
 
 ### Command nodes
 
 For a normal command node, execution order is deterministic:
 
-1. its own command (`detail` when present, otherwise `text`),
-2. every relationship target in relationship-list order,
+1. its own command (`detail` when present, otherwise executable `text`),
+2. every helper relationship target in relationship-list order,
 3. children in tree order.
 
-Window text and declared pane-root text remain structural: they name the window or pane and are not executed. Plain leaf children assigned to an implicit command run execute their text.
-A root `detail` is still executable, and root relationships are expanded before root children.
+Window text and declared pane-root text remain structural: they name the window or pane and are not executed.
 
 ### Relationships
 
-A node may reference one or more `target_id` values. They are expanded in the same order
-in which Freeplane exports the relationships.
+A node may reference one or more `target_id` values.
 
-Each target may be:
+Helper relationship targets are expanded as reusable command subtrees. Variable passing is explicit:
 
-- a leaf function containing one command, or
-- a composite function root whose subtree contains multiple commands.
+- call-site arguments use `arg.<name>`;
+- helper defaults use `default.<name>`;
+- helpers read them through `args.<name>`.
 
-Helper relationship calls are supported from command nodes and pane roots. Their targets are expanded in the call-site context, so `window.name`, `pane.name`, `node-name`, variables, environment, and accumulated `pre` state come from the invocation path rather than the target's storage location. Target-root attributes act as defaults; call-site attributes override them.
+There is no implicit merge of arbitrary call-site and helper attributes.
 
-A relationship declared directly on a `WINDOW` node is different: it is treated as window inheritance rather than a helper call. The current window inherits target windows in relationship order, merges window attributes with later values winning, and re-renders inherited panes in the derived-window context. Explicit panes are de-duplicated by their final rendered pane title (`base1 < base2 < derived`); unnamed implicit command panes are appended in order. WINDOW relationships may only target other `WINDOW` nodes.
+A relationship declared directly on a `WINDOW` node is window inheritance rather than a helper call. The current window inherits target windows in relationship order, merges panes, re-renders inherited panes in the derived-window context, and uses last-wins pane replacement by rendered pane title.
 
-### Attributes and late resolution
+### Service attributes
 
-Attributes are inherited along the actual path from the map root to the command.
+These attributes control compilation and execution but are not published as template data:
 
-- Names matching `^[A-Z_][A-Z0-9_]*$` are environment variables.
-- Other names are template variables.
-- `pre` is a separate accumulated command channel.
-- `ALIAS` nodes define scoped shell aliases.
+- `script1`
+- `exec.pre`
+- `exec.pre_mode`
+- `exec.workdir`
+- `tmux.layout`
+- `tmux.mode`
 
-Templates use `{{ name }}` syntax. Resolution happens at each executable call site, so an ancestor alias or variable may reference a value introduced or overridden further down the path.
+Legacy names such as `pre`, `workdir`, and `window-mode` are not supported.
 
-Built-in variables are available in commands, `pre`, aliases, and relationship targets:
+## Template namespaces
 
-- `{{ session-name }}` — rendered root/session name;
-- `{{ window.name }}` — rendered current `WINDOW` node name;
-- `{{ pane.name }}` — rendered current named pane root, or an empty string for an unnamed/implicit pane;
-- `{{ node-name }}` — rendered current command call-site node name.
+The allowed template namespaces are:
 
-The compiler also injects object-style fields for the current window and pane:
+- `vars.*`
+- `session.*`
+- `window.*`
+- `pane.*`
+- `node.*`
+- `env.*`
+- `args.*`
+- flat scoped variables declared via `var.*`
 
-- `{{ window.<attribute> }}` exposes every Freeplane attribute declared on the effective window after WINDOW inheritance merge; `name` is reserved for the rendered window name.
-- `{{ pane.<attribute> }}` exposes every Freeplane attribute declared on the current pane root; `name` is reserved for the rendered pane name.
-- Root attributes remain ordinary flat globals such as `{{ mgmt }}` or `{{ environment }}`.
+### `vars.*`
 
-Jinja expansion also applies to Freeplane node names before tmuxp emission. Session names may use root attributes, window names may additionally use `session-name` and `window.<attribute>`, pane names may use `session-name`, `window.name`, and `pane.<attribute>`, and executable node names may use all current builtins. For example, a pane node named `{{ window.name }}` inside window `mcmp2` is emitted with pane title `mcmp2`. The legacy `{{ window-name }}` and `{{ pane-name }}` aliases are rejected with a semantic error.
+A root child named `vars` is a special global namespace. Each child node becomes one path segment. Attributes on a `vars` node become fields on that object.
 
-An unresolved command, node name, `pre`, or alias at an executable call site is a semantic error. It is never silently emitted with broken placeholders.
-
-### ALIAS nodes
-
-A child tagged `ALIAS` is a declaration, not an executable command.
-
-- Alias name: node `text`
-- Alias body: `detail`, otherwise relationship target, otherwise `text`
-- Non-alias children continue a composite alias body
-- Declarations inherit by path and may be overridden in a descendant scope
-
-When `ssh host` or a `sudo ...` command opens a new interactive shell context, the compiler injects a temporary Bash rcfile containing the effective environment and aliases. Subsequent tmuxp commands therefore continue in the changed context with the same shell declarations.
-
-### Freeplane details
-
-When Groovy lookup is enabled, details are fetched for all nodes through Freeplane's official
-`node.details.plain` conversion rather than the raw editor HTML returned by `detailsText`. This
-prevents editor indentation and formatting-only line breaks from being injected into shell
-commands or scalar `root...` template values. Existing plain-text sanitation remains the single
-fallback path for local and legacy exports.
-
-Use `--no-groovy-details` to rely only on the normal JSON export.
-
-## Architecture
+Example map:
 
 ```text
-src/freeplane_tmux/
-├── cli.py          # public CLI and workflow orchestration
-├── grpc_client.py  # Freeplane RPC transport
-├── groovy.py       # root script1 and starter-map Groovy generation
-├── models.py       # raw Freeplane model and normalized execution-plan types
-├── text.py         # details fallback sanitation and command splitting
-├── templates.py    # template rendering and unresolved-key validation
-├── scope.py        # vars/env/pre/ALIAS inheritance and late resolution
-├── compiler.py     # semantic normalization into SessionSpec
-├── shell.py        # shell synchronization and ssh/sudo bootstrap
-├── emitter.py      # tmuxp dictionary and YAML output
-└── runtime.py      # tmuxp load and external-process environment boundary
+root
+└── vars
+    └── credentials
+        └── prod
+            └── mysql
+                attributes:
+                  username: alice
+                  password: secret
+                └── env1
+                    attributes:
+                      env_name: env1
 ```
 
-The CLI selects a workflow but does not implement Groovy generation or runtime
-loading. The gRPC client owns transport only. The compiler is independent of map
-acquisition, and the emitter consumes only the validated execution plan.
+Example templates:
+
+```jinja
+{{ vars.credentials.prod.mysql.username }}
+{{ vars.credentials.prod.mysql.password }}
+{{ vars.credentials.prod.mysql.env1.env_name }}
+```
+
+Leaf values are scalars only when they come from `detail`. A field may also be declared as a leaf child node:
+
+```text
+mysql
+└── username
+    detail: alice
+```
+
+That still resolves as:
+
+```jinja
+{{ vars.credentials.prod.mysql.username }}
+```
+
+Objects cannot be rendered as scalars. `{{ vars.credentials.prod.mysql }}` raises an error listing the available child fields.
+
+### Explicit lists
+
+Lists are explicit. A node becomes a list only when it has the `LIST` tag or `type: list`.
+
+Example:
+
+```text
+vars
+└── ips [LIST]
+    ├── 10.10.0.1
+    └── 10.10.0.2
+```
+
+Template usage:
+
+```jinja
+{{ vars.ips }}
+```
+
+When a list is rendered inside a shell command, each item is shell-quoted independently.
+
+### Scoped variables
+
+Scoped variables are explicit and inherit along:
+
+```text
+root → window → pane → parent command → current command
+```
+
+Declare them with `var.<name>` and read them as flat names:
+
+```text
+var.region = eu
+```
+
+```jinja
+{{ region }}
+```
+
+Ordinary attributes do **not** become flat variables.
+
+### Environment
+
+Environment variables are explicit and inherit along the same path as scoped variables.
+
+Declare them with `env.<NAME>`:
+
+```text
+env.PROJECT_DIR = /srv/project
+env.TOKEN = secret
+```
+
+Read them through:
+
+```jinja
+{{ env.PROJECT_DIR }}
+{{ env.TOKEN }}
+```
+
+They are also exported into the generated shell bootstrap.
+
+### Helper arguments
+
+Call-site helper arguments use `arg.<name>`, helper defaults use `default.<name>`, and helpers read them through `args.<name>`.
+
+Example:
+
+```text
+connect
+  arg.username = {{ vars.credentials.prod.mysql.username }}
+  arg.password = {{ vars.credentials.prod.mysql.password }}
+  arg.db = jira_cmdb_sam
+relationship → mongo-helper
+
+mongo-helper
+  default.auth_source = admin
+  detail = mongosh 'mongodb://{{ args.username }}:{{ args.password }}@host/?authSource={{ args.auth_source }}&db={{ args.db }}'
+```
+
+### Runtime object fields
+
+Runtime namespaces expose object-style data only:
+
+```jinja
+{{ session.name }}
+{{ session.id }}
+{{ window.name }}
+{{ window.host }}
+{{ pane.name }}
+{{ pane.database }}
+{{ node.name }}
+{{ node.db }}
+```
+
+If a pane or session has no stable ID in the current compilation context, no synthetic ID is invented.
+
+### Reference table
+
+```text
+Map definition                    Template
+----------------------------------------------------------
+root/vars/db/prod.user            vars.db.prod.user
+window attr host                  window.host
+pane attr db                      pane.db
+node attr db                      node.db
+var.region                        region
+env.PROJECT_DIR                   env.PROJECT_DIR
+arg.username                      args.username
+```
+
+### Removed legacy semantics
+
+The following legacy forms are not supported:
+
+```jinja
+{{ root.* }}
+{{ window-name }}
+{{ pane-name }}
+{{ node-name }}
+{{ session-name }}
+{{ scoped.* }}
+{{ .foobar }}
+```
+
+Likewise, plain attributes such as `host`, `database`, or `db` are not automatically published as top-level template variables.
 
 ## Development
 
+Run the required checks:
+
 ```bash
-python3 -m pip install -e '.[dev]'
-python3 -m compileall -q src tests packaging
-python3 -m pytest -q
+python -m compileall src tests
 ruff check .
 ruff format --check .
+pytest -q
 ```
 
-Canonical maps recovered from the project history live in `examples/history/` as paired files:
-
-```text
-<name>.map.json
-<name>.tmuxp.yaml
-```
-
-`tests/test_history_fixtures.py` recompiles every map and compares the complete tmuxp structure and command lists with the committed YAML. `tests/test_tmuxp_integration.py` then invokes real `tmuxp load -d` and inspects tmux to verify window names, pane counts, and rendered pane titles. The live test combines the generated OSC title update and a harmless `exec sleep` into one shell command, preventing the next interactive prompt from overwriting the title with the hostname. Historical SSH, sudo, ping, editor, and monitoring commands are never run by CI.
-
-Run only the real integration suite with:
-
-```bash
-REQUIRE_TMUXP_INTEGRATION=1 python3 -m pytest -q -m tmuxp_integration
-```
-
-The integration suite requires `tmux` and `tmuxp`. GitHub Actions installs tmux and runs this suite in a dedicated Python 3.12 job.
-
-The tests cover historical map-to-tmuxp compatibility, real tmuxp topology loading, ordered multi-relationship expansion, helper relationship leaf and subtree expansion, WINDOW inheritance merge precedence, inherited-pane re-rendering in the derived window context, explicit-pane replacement by rendered title, implicit-pane ordering, OSC pane titles without tmux-version-specific options, implicit and pane-list modes, path inheritance, `pre` chaining, environment and alias bootstrap across `ssh`/`sudo`, alias late resolution, unresolved alias failures, the direct Groovy terminal path, runtime loading, and HTML cleanup.
-
-## Known boundaries
-
-- Relationship order is significant and follows the order exported by Freeplane.
-- Context bootstrap targets interactive `ssh` calls without an existing remote command and `sudo` shell transitions. An `ssh host some-command` invocation is treated as a self-contained remote command and is left unchanged.
-- Alias transport uses Bash because POSIX shells do not provide a portable alias initialization mechanism.
-- The bundled protobuf modules cover only the RPCs used by this project.
-
-## License
-
-MIT
-
-
-## Bundled gRPC stubs
-
-`freeplane_pb2.py` and `freeplane_pb2_grpc.py` are bundled into the wheel and onefile binary, so runtime access to `metacoma/freeplane_plugin_grpc/grpc/python` is no longer required. The bundled stubs are derived from the upstream `freeplane.proto` definitions and cover the RPCs used by this project (`Groovy`, `MindMapToJSON`, and `GetCurrentNode`).
+`tests/test_tmuxp_integration.py` also runs when `tmux` is available.

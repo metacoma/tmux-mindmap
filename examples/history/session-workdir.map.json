@@ -1,33 +1,39 @@
 {
-  "text": "workdir-demo",
-  "id": "ID_WORKDIR_ROOT",
+  "id": "root",
+  "text": "demo-{{ vars.target }}",
+  "attributes": {
+    "exec.workdir": "{{ vars.base }}/{{ session.name }}"
+  },
   "children": [
     {
-      "text": "ops",
-      "id": "ID_WORKDIR_WINDOW",
+      "id": "vars",
+      "text": "vars",
       "children": [
         {
-          "text": "pwd",
-          "id": "ID_WORKDIR_PWD"
+          "id": "base",
+          "text": "base",
+          "detail": "/srv"
         },
         {
-          "text": "second pane",
-          "id": "ID_WORKDIR_PANE",
-          "children": [
-            {
-              "text": "pwd",
-              "id": "ID_WORKDIR_PANE_PWD"
-            }
-          ]
+          "id": "target",
+          "text": "target",
+          "detail": "prod"
         }
-      ],
+      ]
+    },
+    {
+      "id": "window",
+      "text": "ops",
       "tags": [
         "WINDOW"
+      ],
+      "children": [
+        {
+          "id": "cmd",
+          "text": "hello",
+          "detail": "echo ok"
+        }
       ]
     }
-  ],
-  "attributes": {
-    "base": "/tmp",
-    "workdir": "{{ base }}"
-  }
+  ]
 }
