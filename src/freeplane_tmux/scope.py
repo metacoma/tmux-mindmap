@@ -15,9 +15,10 @@ from .templates import (
     stringify_shell_value,
     stringify_template_value,
 )
-from .text import split_shell_commands
+from .text import join_shell_commands, sanitize_details_text, split_shell_commands
 
 ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+_SIMPLE_LIST_TOKEN_RE = re.compile(r"^[A-Za-z0-9._:/@%+=,-]+$")
 
 
 def to_string(value: Any) -> str:
@@ -57,16 +58,38 @@ class ScopeResolver:
 
     @staticmethod
     def _parse_detail_list(value: str) -> tuple[str, ...] | None:
-        text = value.strip()
-        if not text or "\n" in text:
+        text = sanitize_details_text(value).strip()
+        if not text:
             return None
+
+        nonempty_lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if len(nonempty_lines) > 1:
+            items: list[str] = []
+            for line in nonempty_lines:
+                try:
+                    parts = shlex.split(line, posix=True)
+                except ValueError:
+                    return None
+                if len(parts) != 1:
+                    return None
+                items.extend(parts)
+            return tuple(items) if len(items) > 1 else None
+
         try:
             parts = tuple(shlex.split(text, posix=True))
         except ValueError:
             return None
         if len(parts) <= 1:
             return None
-        return parts
+
+        if "'" in text or '"' in text:
+            return parts
+
+        if all(_SIMPLE_LIST_TOKEN_RE.fullmatch(part) for part in parts) and any(
+            re.search(r"[0-9._:/@%+=,-]", part) for part in parts
+        ):
+            return parts
+        return None
 
     def resolve(
         self,
@@ -113,8 +136,9 @@ class ScopeResolver:
                             items.append(child_value)
                     result: str | ShellList = ShellList(tuple(items))
                 elif node.detail is not None and node.detail.strip():
+                    clean_detail = sanitize_details_text(node.detail)
                     rendered_detail = render_template(
-                        node.detail,
+                        clean_detail,
                         lookup_value,
                         stringify=stringify_template_value,
                     )
@@ -229,7 +253,7 @@ class ScopeResolver:
                     break
                 rendered_lines.extend(split_shell_commands(rendered))
             if not unresolved and rendered_lines:
-                aliases_out[name] = "; ".join(rendered_lines)
+                aliases_out[name] = join_shell_commands(rendered_lines)
 
         return ScopeSnapshot(
             vars=vars_out,
@@ -244,7 +268,8 @@ class ScopeResolver:
         return require_resolved(rendered, subject=subject)
 
     def render_command_block(self, template: str, scope: ScopeSnapshot, *, subject: str) -> str:
-        rendered = render_template(template, scope.lookup, stringify=stringify_shell_value)
+        cleaned = sanitize_details_text(template)
+        rendered = render_template(cleaned, scope.lookup, stringify=stringify_shell_value)
         return require_resolved(rendered, subject=subject)
 
     def render_command(self, template: str, scope: ScopeSnapshot, *, subject: str) -> list[str]:

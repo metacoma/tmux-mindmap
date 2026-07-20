@@ -688,7 +688,10 @@ def test_root_detail_list_lookup_preserves_multiline_shell_block() -> None:
 
     pane = compile_map(raw).windows[0].panes[0]
     assert [step.command for step in pane.steps] == [
-        'for i in 8.8.8.8 1.1.1.1 4.4.4.4\ndo\n  printf "%s\\n" "$i"\ndone'
+        "for i in 8.8.8.8 1.1.1.1 4.4.4.4",
+        "do",
+        'printf "%s\\n" "$i"',
+        "done",
     ]
 
 
@@ -723,3 +726,86 @@ def test_root_lookup_works_inside_relationship_helper_commands() -> None:
         "run",
         'for i in 10.20.0.3 10.20.0.4; do echo "$i"; done',
     ]
+
+
+def test_multiline_root_list_commands_are_split_cleanly() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "ips",
+                "ips",
+                children=[
+                    node("ip1", "10.20.0.3"),
+                    node("ip2", "10.20.0.4"),
+                ],
+            ),
+            node("public", "public_ips", detail="8.8.8.8 1.1.1.1 4.4.4.4"),
+            node(
+                "window-a",
+                "from-children",
+                tags=["WINDOW"],
+                children=[
+                    node(
+                        "pane-a",
+                        "show all ips",
+                        detail=(
+                            "<html><body><p>for i in {{ root.ips }}</p>"
+                            "<p>&nbsp;&nbsp;&nbsp;echo ${i}</p><p>done</p></body></html>"
+                        ),
+                    )
+                ],
+            ),
+            node(
+                "window-b",
+                "from-detail",
+                tags=["WINDOW"],
+                children=[
+                    node(
+                        "pane-b",
+                        "show all ips",
+                        detail=(
+                            "<html><body><p>for i in {{ root.public_ips }}</p>"
+                            "<p>&nbsp;&nbsp;&nbsp;echo ${i}</p><p>done</p></body></html>"
+                        ),
+                    )
+                ],
+            ),
+        ],
+    )
+
+    windows = compile_map(raw).windows
+    emitted_children = pane_shell_commands(windows[0].panes[0])
+    emitted_detail = pane_shell_commands(windows[1].panes[0])
+
+    assert emitted_children[-3:] == [
+        "for i in 10.20.0.3 10.20.0.4",
+        "echo ${i}",
+        "done",
+    ]
+    assert emitted_detail[-3:] == [
+        "for i in 8.8.8.8 1.1.1.1 4.4.4.4",
+        "echo ${i}",
+        "done",
+    ]
+
+
+def test_multiline_alias_pipeline_preserves_pipe_continuation() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "alias",
+                "temperature",
+                tags=["ALIAS"],
+                detail="<html><body><p>printf x |</p><p>cat</p></body></html>",
+            ),
+            node("window", "ops", tags=["WINDOW"], children=[node("command", "temperature")]),
+        ],
+    )
+
+    emitted = pane_shell_commands(compile_map(raw).windows[0].panes[0])
+    assert "alias temperature='printf x | cat'" in emitted
+    assert all("|;" not in command for command in emitted)

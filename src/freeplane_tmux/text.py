@@ -6,6 +6,7 @@ from html.parser import HTMLParser
 
 _HTML_MARKER_RE = re.compile(r"(?is)<\s*/?\s*(?:html|body|p|div|br|li|ul|ol|pre|span|font)\b")
 _BLOCK_TAGS = {"p", "div", "li", "ul", "ol", "pre", "body", "html"}
+_CONTINUATION_SUFFIX_RE = re.compile(r"(?:\|{1,2}|&&|\\|\(|\{|\b(?:do|then|else|elif)\b)\s*$")
 
 
 class _DetailsTextParser(HTMLParser):
@@ -52,7 +53,7 @@ def sanitize_details_text(value: str | None) -> str:
     parser = _DetailsTextParser()
     parser.feed(text)
     parser.close()
-    cleaned = html.unescape(parser.text())
+    cleaned = html.unescape(parser.text()).replace("\xa0", " ")
     lines = [line.rstrip() for line in normalize_newlines(cleaned).split("\n")]
 
     while lines and not lines[0].strip():
@@ -66,3 +67,17 @@ def sanitize_details_text(value: str | None) -> str:
 def split_shell_commands(value: str | None) -> list[str]:
     text = sanitize_details_text(value)
     return [line.strip() for line in text.split("\n") if line.strip()]
+
+
+def join_shell_commands(lines: list[str]) -> str:
+    cleaned = [line.strip() for line in lines if line.strip()]
+    if not cleaned:
+        return ""
+
+    result = cleaned[0]
+    for line in cleaned[1:]:
+        if _CONTINUATION_SUFFIX_RE.search(result):
+            result += " " + line
+        else:
+            result += "; " + line
+    return result
