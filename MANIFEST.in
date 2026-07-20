@@ -1,5 +1,5 @@
 include CONTRIBUTING.md
 recursive-include .github *.yml
 recursive-include examples *.json *.yaml
-recursive-include packaging *.py *.spec
+recursive-include packaging *.py *.spec *.md *.groovy
 recursive-include tests *.py

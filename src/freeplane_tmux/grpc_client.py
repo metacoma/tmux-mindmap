@@ -188,6 +188,31 @@ def fetch_live_map(
         channel.close()
 
 
+def execute_groovy(*, address: str, timeout: float, groovy_code: str) -> tuple[str, Any | None]:
+    try:
+        import grpc
+    except ImportError as exc:
+        raise GrpcClientError("grpcio is required for live Freeplane operations") from exc
+
+    pb2, pb2_grpc = _load_stubs()
+    channel = grpc.insecure_channel(address)
+    try:
+        grpc.channel_ready_future(channel).result(timeout=timeout)
+        stub = pb2_grpc.FreeplaneStub(channel)
+        response = stub.Groovy(pb2.GroovyRequest(groovy_code=groovy_code), timeout=timeout)
+        if not getattr(response, "success", False):
+            error = getattr(response, "error_message", "") or "Groovy returned success=false"
+            raise GrpcClientError(error)
+        result_text = getattr(response, "result", "") or ""
+        return result_text, _extract_json_value(result_text)
+    except grpc.FutureTimeoutError as exc:
+        raise GrpcClientError(
+            f"Freeplane gRPC server at {address} did not become ready within {timeout:g}s"
+        ) from exc
+    finally:
+        channel.close()
+
+
 def fetch_current_node_id(*, address: str, timeout: float) -> str:
     """Return the id of the node currently selected in Freeplane."""
 

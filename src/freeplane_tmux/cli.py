@@ -8,7 +8,10 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .diagnostics import build_explain_plan, compile_with_diagnostics, explain_text
+from .doctor import format_doctor_text, run_doctor
 from .errors import SemanticError
+from .freeplane_projector import FreeplaneDiagnosticProjector
 from .models import RawNode, RawValidationError
 
 DEFAULT_GRPC_ADDRESS = "127.0.0.1:50051"
@@ -55,6 +58,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Export the Freeplane map root to tmuxp YAML and optionally load it."
     )
+    parser.add_argument(
+        "command", nargs="?", choices=["validate", "explain", "doctor", "clear-diagnostics"]
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument(
         "--create",
@@ -99,6 +105,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--map-json",
         help="Use a local MindMapToJSON export instead of contacting Freeplane",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON for validate/explain/doctor",
+    )
     dump_group = parser.add_mutually_exclusive_group()
     dump_group.add_argument(
         "--dump",
@@ -126,6 +137,7 @@ def _validate_create_mode(args: argparse.Namespace) -> None:
         "--dump": args.dump,
         "--dump-from-node": args.dump_from_node,
         "--pretty": args.pretty,
+        "command": args.command,
     }
     used = [name for name, value in incompatible.items() if value]
     if used:
@@ -139,6 +151,9 @@ def _validate_mode_combinations(args: argparse.Namespace) -> None:
         raise ValueError("--detached can only be used with --load")
     if args.dump_from_node and args.map_json:
         raise ValueError("--dump-from-node requires a live Freeplane connection")
+
+    if args.command is not None and (args.dump or args.dump_from_node or args.load or args.create):
+        raise ValueError(f"{args.command} cannot be combined with dump/create/load modes")
 
     if args.dump or args.dump_from_node:
         incompatible = {
@@ -217,8 +232,88 @@ def _create_load_command(args: argparse.Namespace) -> list[str]:
     ]
 
 
+def _maybe_project_diagnostics(args: argparse.Namespace, diagnostics) -> None:
+    if args.map_json:
+        return
+    projector = FreeplaneDiagnosticProjector(address=args.addr, timeout=args.timeout)
+    projector.apply(list(diagnostics))
+
+
+def _handle_validate(args: argparse.Namespace) -> int:
+    root, _raw_data = _load_map(args)
+    result = compile_with_diagnostics(root)
+    if not args.map_json:
+        _maybe_project_diagnostics(args, result.diagnostics)
+    if args.json:
+        print(
+            json.dumps(result.to_json_dict(), ensure_ascii=False, indent=2 if args.pretty else None)
+        )
+    else:
+        for diagnostic in result.diagnostics:
+            location = f" [{diagnostic.node_path}]" if diagnostic.node_path else ""
+            print(
+                f"{diagnostic.severity.upper()} {diagnostic.code}: {diagnostic.message}{location}",
+                file=sys.stdout,
+            )
+    return 0 if result.ok else 1
+
+
+def _handle_explain(args: argparse.Namespace) -> int:
+    root, _raw_data = _load_map(args)
+    result = compile_with_diagnostics(root)
+    if not result.ok or result.session is None:
+        if args.json:
+            print(
+                json.dumps(
+                    result.to_json_dict(), ensure_ascii=False, indent=2 if args.pretty else None
+                )
+            )
+        else:
+            for diagnostic in result.diagnostics:
+                print(f"{diagnostic.severity.upper()} {diagnostic.code}: {diagnostic.message}")
+        return 1
+    plan = build_explain_plan(root, result.session)
+    if args.json:
+        print(json.dumps(plan, ensure_ascii=False, indent=2 if args.pretty else None))
+    else:
+        print(explain_text(plan), end="")
+    return 0
+
+
+def _handle_doctor(args: argparse.Namespace) -> int:
+    report = run_doctor(address=args.addr, timeout=args.timeout)
+    if args.json:
+        print(
+            json.dumps(report.to_json_dict(), ensure_ascii=False, indent=2 if args.pretty else None)
+        )
+    else:
+        print(format_doctor_text(report), end="")
+    return 0 if report.ok else 1
+
+
+def _handle_clear_diagnostics(args: argparse.Namespace) -> int:
+    if args.map_json:
+        raise ValueError("clear-diagnostics requires a live Freeplane connection")
+    projector = FreeplaneDiagnosticProjector(address=args.addr, timeout=args.timeout)
+    projector.clear()
+    if not args.json:
+        print("Cleared tmux-mindmap diagnostics")
+    else:
+        print(json.dumps({"ok": True, "cleared": True}, ensure_ascii=False))
+    return 0
+
+
 def _run_main(args: argparse.Namespace) -> int:
     _validate_mode_combinations(args)
+
+    if args.command == "validate":
+        return _handle_validate(args)
+    if args.command == "explain":
+        return _handle_explain(args)
+    if args.command == "doctor":
+        return _handle_doctor(args)
+    if args.command == "clear-diagnostics":
+        return _handle_clear_diagnostics(args)
 
     if args.create is not None:
         _validate_create_mode(args)
@@ -249,10 +344,18 @@ def _run_main(args: argparse.Namespace) -> int:
         return 0
 
     root, raw_data = _load_map(args)
-    from .compiler import MindmapCompiler
     from .emitter import dump_tmuxp_yaml, session_to_tmuxp
 
-    session = MindmapCompiler(root).compile()
+    result = compile_with_diagnostics(root)
+    if not result.ok or result.session is None:
+        for diagnostic in result.diagnostics:
+            print(
+                f"{diagnostic.severity.upper()} {diagnostic.code}: {diagnostic.message}",
+                file=sys.stderr,
+            )
+        return 1
+
+    session = result.session
     tmuxp_data = session_to_tmuxp(session)
     json_path, yaml_path = _output_paths(args, session.session_name)
 
@@ -270,6 +373,7 @@ def _run_main(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    modern_mode = args.command in {"validate", "explain", "doctor", "clear-diagnostics"}
     try:
         return _run_main(args)
     except RawValidationError as exc:
@@ -277,13 +381,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except SemanticError as exc:
         print(f"SEMANTIC VALIDATION ERROR:\n{exc}", file=sys.stderr)
-        return 3
+        return 2 if modern_mode else 3
     except (json.JSONDecodeError, ValueError) as exc:
         print(f"JSON ERROR: {exc}", file=sys.stderr)
-        return 4
+        return 2 if modern_mode else 4
     except RuntimeError as exc:
         print(f"RUNTIME ERROR: {exc}", file=sys.stderr)
-        return 5
+        return 2 if modern_mode else 5
 
 
 if __name__ == "__main__":

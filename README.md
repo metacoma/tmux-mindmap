@@ -2,27 +2,44 @@
 
 Generate reproducible [`tmuxp`](https://github.com/tmux-python/tmuxp) sessions from a Freeplane mindmap exported through [`metacoma/freeplane_plugin_grpc`](https://github.com/metacoma/freeplane_plugin_grpc).
 
-The compiler treats the map as a small declarative execution language:
+Version 0.4 turns the map into a small Freeplane IDE for tmux sessions:
 
-- `WINDOW` nodes define tmux windows.
-- Window children define implicit command runs or explicit panes.
-- Relationships call reusable helper subtrees or inherit another `WINDOW`.
-- Templates are resolved with a strict, explicit namespace model.
+- compile the whole map into tmuxp;
+- validate maps without starting tmux;
+- explain the resolved execution plan;
+- project diagnostics back onto Freeplane nodes;
+- run environment checks with `doctor`;
+- keep the existing `WINDOW` semantics and current template model.
+
+## Guarantees and non-goals
+
+- The window tag is still exactly `WINDOW`.
+- No schema attribute or schema version is required.
+- Selected-window / selected-pane execution is not supported.
+- `script1` is a service launcher attribute and is not exposed to templates.
+- Warnings do not block compilation.
+- Errors block `--load` and `validate` returns a failing exit code.
 
 ## Features
 
-- Strict template resolution with helpful undefined-variable errors.
+- Structured diagnostics with severities `error`, `warning`, `info`.
+- `freeplane-tmux validate` and `freeplane-tmux validate --json`.
+- `freeplane-tmux explain` and `freeplane-tmux explain --json`.
+- `freeplane-tmux doctor` and `freeplane-tmux doctor --json`.
+- `freeplane-tmux clear-diagnostics`.
+- Projection of `tmux-mindmap` diagnostics back to the opened Freeplane map through the existing Groovy RPC.
 - Explicit global `vars.*` namespace built from the root child `vars`.
-- Object-style runtime namespaces: `session.*`, `window.*`, `pane.*`, `node.*`, `env.*`, `args.*`.
+- Runtime namespaces: `session.*`, `window.*`, `pane.*`, `node.*`, `env.*`, `args.*`.
 - Explicit scoped variables via `var.*`.
 - Explicit environment variables via `env.*`.
 - Explicit helper arguments via `arg.*` and helper defaults via `default.*`.
 - Explicit list values via `LIST` tags or `type: list`.
 - Ordered `exec.pre` accumulation across root, window, pane, command, and helper scopes.
 - Scoped `ALIAS` declarations with late resolution.
-- Automatic alias / environment bootstrap through `ssh` and interactive `sudo` transitions.
+- Automatic alias / environment bootstrap through supported `ssh` and interactive `sudo` transitions.
+- `alias ...` is always followed by `clear` in emitted shell bootstrap.
 - Root `exec.workdir` emitted as tmuxp `start_directory`.
-- Root `script1` preserved in map dumps but excluded from template context.
+- Existing tmux session is killed before a new `--load`; no interactive `Attach? [Y/n]` prompt is used.
 
 ## Requirements
 
@@ -45,7 +62,7 @@ For installation from source:
 ```bash
 git clone https://github.com/metacoma/freeplane-tmux.git
 cd freeplane-tmux
-python3 -m pip install .
+python3 -m pip install .[dev]
 ```
 
 Install the Freeplane plugin from `metacoma/freeplane_plugin_grpc`.
@@ -61,6 +78,28 @@ chmod +x freeplane-tmux-linux-x86_64
 sudo install -m 0755 freeplane-tmux-linux-x86_64 /usr/local/bin/freeplane-tmux
 freeplane-tmux --help
 ```
+
+## Freeplane addon
+
+A minimal installable set of Groovy actions is stored in:
+
+```text
+packaging/freeplane-addon/
+```
+
+Recommended menu layout:
+
+```text
+Tools
+└── tmux-mindmap
+    ├── Validate map
+    ├── Explain map
+    ├── Load session
+    ├── Clear diagnostics
+    └── Doctor
+```
+
+The addon keeps `WINDOW` as the window tag and does not add selected-window execution.
 
 ## Direct GUI terminal launch from `script1`
 
@@ -125,24 +164,90 @@ Dump the currently selected node and its descendant subtree as a standalone JSON
 freeplane-tmux --dump-from-node --pretty
 ```
 
-Current CLI surface:
+### Validation
 
-```text
---create / --create-map
---create-terminal
---addr
---timeout
---output-dir
---json-out
---yaml-out
---load
---detached
---no-groovy-details
---map-json
---dump
---dump-from-node
---pretty
+```bash
+freeplane-tmux validate
+freeplane-tmux validate --json
 ```
+
+Exit codes:
+
+- `0` — no errors, warnings may exist
+- `1` — user-facing map errors were found
+- `2` — system/runtime problem
+
+### Explain
+
+```bash
+freeplane-tmux explain
+freeplane-tmux explain --json
+```
+
+`explain` does not start tmux. It prints the resolved execution plan with window, pane, command, relationship, and provenance information.
+
+### Doctor
+
+```bash
+freeplane-tmux doctor
+freeplane-tmux doctor --json
+```
+
+`doctor` checks the Freeplane gRPC connection, available Groovy projection capabilities, tmux, tmuxp, terminal command, temporary tmux session creation, launcher log path, and PyInstaller resource paths.
+
+### Clear diagnostics
+
+```bash
+freeplane-tmux clear-diagnostics
+```
+
+This clears only markers created by `tmux-mindmap`.
+
+## Diagnostics in Freeplane
+
+When `validate` runs against a live Freeplane instance, diagnostics are projected back into the currently opened map through the existing Groovy RPC.
+
+The projector is designed to be idempotent:
+
+- previous `tmux-mindmap` markers are cleared before new ones are applied;
+- the first error node is focused when possible;
+- user command details are not modified;
+- only project-managed diagnostic attributes / status / icons are touched.
+
+If a given Freeplane runtime cannot add icons safely, `doctor` reports that capability and the projector falls back to reversible attributes / status updates.
+
+## Warnings
+
+Current warning codes include:
+
+- `INFERRED_PANE`
+- `UNTYPED_RELATIONSHIP`
+- `EMPTY_WINDOW`
+- `INEFFECTIVE_LAYOUT`
+- `UNUSED_HELPER`
+- `CONTEXT_PROPAGATION_SKIPPED`
+
+Warnings are machine-readable and do not block compilation.
+
+## Relationship semantics
+
+Relationships are resolved internally as one of two kinds:
+
+- `call`
+- `inherit`
+
+Rules:
+
+- relationship to a `WINDOW` node means `inherit`;
+- relationship to a helper/function node means `call`;
+- if the dump carries an explicit kind (`call` / `inherit`), it is validated and preserved;
+- if the dump has no explicit kind, the compiler infers it and emits `UNTYPED_RELATIONSHIP`.
+
+Window inheritance semantics remain unchanged:
+
+- inherited panes are merged in relationship order;
+- the referencing `WINDOW` wins on conflicts;
+- inheritance cycles are reported as diagnostics.
 
 ## Mindmap semantics
 
@@ -190,20 +295,6 @@ For a normal command node, execution order is deterministic:
 
 Window text and declared pane-root text remain structural: they name the window or pane and are not executed.
 
-### Relationships
-
-A node may reference one or more `target_id` values.
-
-Helper relationship targets are expanded as reusable command subtrees. Variable passing is explicit:
-
-- call-site arguments use `arg.<name>`;
-- helper defaults use `default.<name>`;
-- helpers read them through `args.<name>`.
-
-There is no implicit merge of arbitrary call-site and helper attributes.
-
-A relationship declared directly on a `WINDOW` node is window inheritance rather than a helper call. The current window inherits target windows in relationship order, merges panes, re-renders inherited panes in the derived-window context, and uses last-wins pane replacement by rendered pane title.
-
 ### Service attributes
 
 These attributes control compilation and execution but are not published as template data:
@@ -219,7 +310,7 @@ Legacy names such as `pre`, `workdir`, and `window-mode` are not supported.
 
 ## Template namespaces
 
-The allowed template namespaces are:
+The supported template namespaces are:
 
 - `vars.*`
 - `session.*`
@@ -258,157 +349,13 @@ Example templates:
 {{ vars.credentials.prod.mysql.env1.env_name }}
 ```
 
-Leaf values are scalars only when they come from `detail`. A field may also be declared as a leaf child node:
+## Development checks
 
-```text
-mysql
-└── username
-    detail: alice
-```
-
-That still resolves as:
-
-```jinja
-{{ vars.credentials.prod.mysql.username }}
-```
-
-Objects cannot be rendered as scalars. `{{ vars.credentials.prod.mysql }}` raises an error listing the available child fields.
-
-### Explicit lists
-
-Lists are explicit. A node becomes a list only when it has the `LIST` tag or `type: list`.
-
-Example:
-
-```text
-vars
-└── ips [LIST]
-    ├── 10.10.0.1
-    └── 10.10.0.2
-```
-
-Template usage:
-
-```jinja
-{{ vars.ips }}
-```
-
-When a list is rendered inside a shell command, each item is shell-quoted independently.
-
-### Scoped variables
-
-Scoped variables are explicit and inherit along:
-
-```text
-root → window → pane → parent command → current command
-```
-
-Declare them with `var.<name>` and read them as flat names:
-
-```text
-var.region = eu
-```
-
-```jinja
-{{ region }}
-```
-
-Ordinary attributes do **not** become flat variables.
-
-### Environment
-
-Environment variables are explicit and inherit along the same path as scoped variables.
-
-Declare them with `env.<NAME>`:
-
-```text
-env.PROJECT_DIR = /srv/project
-env.TOKEN = secret
-```
-
-Read them through:
-
-```jinja
-{{ env.PROJECT_DIR }}
-{{ env.TOKEN }}
-```
-
-They are also exported into the generated shell bootstrap.
-
-### Helper arguments
-
-Call-site helper arguments use `arg.<name>`, helper defaults use `default.<name>`, and helpers read them through `args.<name>`.
-
-Example:
-
-```text
-connect
-  arg.username = {{ vars.credentials.prod.mysql.username }}
-  arg.password = {{ vars.credentials.prod.mysql.password }}
-  arg.db = jira_cmdb_sam
-relationship → mongo-helper
-
-mongo-helper
-  default.auth_source = admin
-  detail = mongosh 'mongodb://{{ args.username }}:{{ args.password }}@host/?authSource={{ args.auth_source }}&db={{ args.db }}'
-```
-
-### Runtime object fields
-
-Runtime namespaces expose object-style data only:
-
-```jinja
-{{ session.name }}
-{{ session.id }}
-{{ window.name }}
-{{ window.host }}
-{{ pane.name }}
-{{ pane.database }}
-{{ node.name }}
-{{ node.db }}
-```
-
-If a pane or session has no stable ID in the current compilation context, no synthetic ID is invented.
-
-### Reference table
-
-```text
-Map definition                    Template
-----------------------------------------------------------
-root/vars/db/prod.user            vars.db.prod.user
-window attr host                  window.host
-pane attr db                      pane.db
-node attr db                      node.db
-var.region                        region
-env.PROJECT_DIR                   env.PROJECT_DIR
-arg.username                      args.username
-```
-
-### Removed legacy semantics
-
-The following legacy forms are not supported:
-
-```jinja
-{{ root.* }}
-{{ window-name }}
-{{ pane-name }}
-{{ node-name }}
-{{ session-name }}
-{{ scoped.* }}
-{{ .foobar }}
-```
-
-Likewise, plain attributes such as `host`, `database`, or `db` are not automatically published as top-level template variables.
-
-## Development
-
-Run the required checks:
+Run the full local validation set:
 
 ```bash
-python -m compileall src tests
+python -m compileall -q src tests packaging
 ruff check .
 ruff format --check .
 pytest -q
 ```
-
-`tests/test_tmuxp_integration.py` also runs when `tmux` is available.
