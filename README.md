@@ -30,9 +30,10 @@ Version 0.4 turns the map into a small Freeplane IDE for tmux sessions:
 - Projection of `tmux-mindmap` diagnostics back to the opened Freeplane map through the existing Groovy RPC.
 - Explicit global `vars.*` namespace built from the root child `vars`.
 - Runtime namespaces: `session.*`, `window.*`, `pane.*`, `node.*`, `env.*`, `args.*`.
+- Ordinary attributes of the currently executing command node are also available as local flat template variables.
 - Explicit scoped variables via `var.*`.
 - Explicit environment variables via `env.*`.
-- Explicit helper arguments via `arg.*` and helper defaults via `default.*`.
+- Relationship calls use ordinary attributes as function parameters; target attributes act as defaults and callsite attributes act as overrides.
 - Explicit list values via `LIST` tags or `type: list`.
 - Ordered `exec.pre` accumulation across root, window, pane, command, and helper scopes.
 - Scoped `ALIAS` declarations with late resolution.
@@ -249,6 +250,66 @@ Window inheritance semantics remain unchanged:
 - the referencing `WINDOW` wins on conflicts;
 - inheritance cycles are reported as diagnostics.
 
+Helper relationships behave like function calls:
+
+- ordinary attributes on the target node are default parameter values;
+- ordinary attributes on the callsite node are call overrides;
+- inherited relationship bindings remain visible to nested helper calls;
+- nested merge order is `parent relationship bindings -> nested target defaults -> nested callsite overrides`;
+- ordinary attributes become flat template variables only for the currently executing command node;
+- the same values remain available through `node.*`.
+
+Example:
+
+```json
+{
+  "text": "print six",
+  "attributes": {
+    "first": "3",
+    "second": "3"
+  },
+  "relationships": [
+    {
+      "target_id": "sum"
+    }
+  ]
+}
+```
+
+Target helper:
+
+```jinja
+echo {{ first }} + {{ second }} | bc
+```
+
+Target defaults can live on the helper itself:
+
+```json
+{
+  "id": "find-user",
+  "text": "who | grep {{ user }}",
+  "attributes": {
+    "user": "bebebeka"
+  }
+}
+```
+
+and a relationship callsite can override them naturally:
+
+```json
+{
+  "text": "find another user",
+  "attributes": {
+    "user": "root"
+  },
+  "relationships": [
+    {
+      "target_id": "find-user"
+    }
+  ]
+}
+```
+
 ## Mindmap semantics
 
 ### Session and windows
@@ -320,6 +381,14 @@ The supported template namespaces are:
 - `env.*`
 - `args.*`
 - flat scoped variables declared via `var.*`
+- local flat variables from ordinary attributes of the currently executing command node
+
+Rules:
+
+- `node.*` exposes ordinary attributes of the current node as object fields;
+- plain `{{ name }}` resolves only against the current command node, active relationship bindings, and `var.*` values;
+- service attributes are never exposed as flat variables or through runtime objects;
+- ordinary attribute names cannot shadow `session`, `window`, `pane`, `node`, `env`, `vars`, or `args`.
 
 ### `vars.*`
 

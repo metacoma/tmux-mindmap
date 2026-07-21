@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field, is_dataclass
+from dataclasses import dataclass, field, fields, is_dataclass
 from enum import Enum
 from typing import Any, Literal
 
@@ -196,7 +196,13 @@ class SessionSpec:
 
 def dataclass_to_dict(value: Any) -> Any:
     if is_dataclass(value):
-        return {key: dataclass_to_dict(item) for key, item in asdict(value).items()}
+        result: dict[str, Any] = {}
+        for dataclass_field in fields(value):
+            item = getattr(value, dataclass_field.name)
+            if dataclass_field.name == "lookup_value":
+                continue
+            result[dataclass_field.name] = dataclass_to_dict(item)
+        return result
     if isinstance(value, tuple):
         return [dataclass_to_dict(item) for item in value]
     if isinstance(value, list):

@@ -24,6 +24,11 @@
       "name": "window-inheritance",
       "map": "window-inheritance.map.yaml",
       "tmuxp": "window-inheritance.tmuxp.yaml"
+    },
+    {
+      "name": "relationship-plain-attributes",
+      "map": "relationship-plain-attributes.map.json",
+      "tmuxp": "relationship-plain-attributes.tmuxp.yaml"
     }
   ]
 }

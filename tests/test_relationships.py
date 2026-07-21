@@ -1,44 +1,22 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-import pytest
 import yaml
 from conftest import compile_map, node
 
-from freeplane_tmux.errors import SemanticError
+from freeplane_tmux.diagnostics import build_explain_plan
+from freeplane_tmux.models import RawNode
 
 FIXTURE_DIR = Path(__file__).parents[1] / "examples" / "history"
 
 
-def test_relationship_args_use_defaults_and_callsite_overrides() -> None:
+def test_relationship_plain_attributes_use_defaults_and_callsite_overrides() -> None:
     raw = node(
         "root",
         "demo",
         children=[
-            node(
-                "vars",
-                "vars",
-                children=[
-                    node(
-                        "credentials",
-                        "credentials",
-                        children=[
-                            node(
-                                "prod",
-                                "prod",
-                                children=[
-                                    node(
-                                        "mysql",
-                                        "mysql",
-                                        attributes={"username": "alice", "password": "secret"},
-                                    )
-                                ],
-                            )
-                        ],
-                    )
-                ],
-            ),
             node(
                 "window",
                 "ops",
@@ -49,33 +27,24 @@ def test_relationship_args_use_defaults_and_callsite_overrides() -> None:
                         "connect",
                         "connect",
                         relationship="mongo-helper",
-                        attributes={
-                            "arg.username": "{{ vars.credentials.prod.mysql.username }}",
-                            "arg.password": "{{ vars.credentials.prod.mysql.password }}",
-                            "arg.db": "jira_cmdb_sam",
-                        },
+                        attributes={"user": "root"},
                     )
                 ],
             ),
             node(
                 "mongo-helper",
                 "mongo helper",
-                attributes={"default.auth_source": "admin"},
-                detail=(
-                    "mongosh 'mongodb://{{ args.username }}:{{ args.password }}@host/"
-                    "?authSource={{ args.auth_source }}&db={{ args.db }}'"
-                ),
+                attributes={"user": "bebebeka"},
+                detail="who | grep {{ user }}",
             ),
         ],
     )
 
     pane = compile_map(raw).windows[0].panes[0]
-    assert [step.command for step in pane.steps] == [
-        "mongosh 'mongodb://alice:secret@host/?authSource=admin&db=jira_cmdb_sam'"
-    ]
+    assert [step.command for step in pane.steps] == ["who | grep root"]
 
 
-def test_relationship_does_not_implicitly_merge_callsite_attributes_into_args() -> None:
+def test_relationship_without_target_defaults_uses_callsite_plain_attributes() -> None:
     raw = node(
         "root",
         "demo",
@@ -87,19 +56,95 @@ def test_relationship_does_not_implicitly_merge_callsite_attributes_into_args() 
                 attributes={"tmux.mode": "single-pane"},
                 children=[
                     node(
-                        "connect",
-                        "connect",
-                        relationship="mongo-helper",
-                        attributes={"username": "alice"},
+                        "print-six",
+                        "print six",
+                        relationship="sum",
+                        attributes={"first": "3", "second": "3"},
                     )
                 ],
             ),
-            node("mongo-helper", "mongo helper", detail="echo {{ args.username }}"),
+            node("sum", "sum", detail="echo {{ first }} + {{ second }} | bc"),
         ],
     )
 
-    with pytest.raises(SemanticError, match=r'undefined template variable "args.username"'):
-        compile_map(raw)
+    pane = compile_map(raw).windows[0].panes[0]
+    assert [step.command for step in pane.steps] == ["echo 3 + 3 | bc"]
+
+
+def test_dual_use_node_works_directly_and_through_relationship() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                attributes={"tmux.mode": "single-pane"},
+                children=[
+                    node(
+                        "find-user",
+                        "find user",
+                        detail="who | grep {{ user }}",
+                        attributes={"user": "bebebeka"},
+                    ),
+                    node(
+                        "find-another",
+                        "find another user",
+                        relationship="find-user",
+                        attributes={"user": "root"},
+                    ),
+                ],
+            )
+        ],
+    )
+
+    pane = compile_map(raw).windows[0].panes[0]
+    assert [step.command for step in pane.steps] == ["who | grep bebebeka", "who | grep root"]
+
+
+def test_nested_relationship_uses_inherited_bindings_then_defaults_then_overrides() -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                attributes={"tmux.mode": "single-pane"},
+                children=[
+                    node(
+                        "outer-call",
+                        "outer call",
+                        relationship="outer-helper",
+                        attributes={"user": "root", "role": "reader"},
+                    )
+                ],
+            ),
+            node(
+                "outer-helper",
+                "outer helper",
+                children=[
+                    node(
+                        "inner-call",
+                        "inner call",
+                        relationship="inner-helper",
+                        attributes={"role": "writer"},
+                    )
+                ],
+            ),
+            node(
+                "inner-helper",
+                "inner helper",
+                attributes={"user": "bebebeka", "role": "admin"},
+                detail="echo {{ user }} {{ role }}",
+            ),
+        ],
+    )
+
+    pane = compile_map(raw).windows[0].panes[0]
+    assert [step.command for step in pane.steps] == ["echo bebebeka writer"]
 
 
 def test_relationship_exec_pre_appends_after_callsite_chain() -> None:
@@ -154,3 +199,38 @@ def test_window_inheritance_fixture_uses_new_runtime_context() -> None:
         "ping mcmp3.mgmt.example.invalid",
     ]
     assert mcmp3.panes[0].base_scope.pre == ("ssh hw0076",)
+
+
+def test_full_plain_attribute_relationship_fixture() -> None:
+    raw = json.loads(
+        (FIXTURE_DIR / "relationship-plain-attributes.map.json").read_text(encoding="utf-8")
+    )
+    session = compile_map(raw)
+
+    assert [window.name for window in session.windows] == ["user find"]
+    panes = session.windows[0].panes
+    assert [pane.title for pane in panes] == [None, "find another user", "print six"]
+    assert [pane.base_scope.pre for pane in panes] == [
+        ("ssh hw0076",),
+        ("ssh hw0076",),
+        ("ssh hw0076",),
+    ]
+    assert [[step.command for step in pane.steps] for pane in panes] == [
+        ["who | grep bebebeka"],
+        ["who | grep root"],
+        ["echo 3 + 3 | bc"],
+    ]
+
+    plan = build_explain_plan(RawNode.model_validate(raw), session)
+    commands = [
+        command["command"]
+        for window in plan["windows"]
+        for pane in window["panes"]
+        for command in pane["commands"]
+    ]
+    assert "who | grep bebebeka" in commands
+    assert "who | grep root" in commands
+    assert "echo 3 + 3 | bc" in commands
+    assert any(edge["source_node_id"] == "ID_1914466011" for edge in plan["relationships"])
+    assert any(edge["source_node_id"] == "ID_119864851" for edge in plan["relationships"])
+    assert "script1" not in json.dumps(plan, ensure_ascii=False)

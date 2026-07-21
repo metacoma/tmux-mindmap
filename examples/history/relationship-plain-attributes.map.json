@@ -1,0 +1,62 @@
+{
+  "text": "nl tunnel",
+  "id": "ID_1090958577",
+  "children": [
+    {
+      "text": "user find",
+      "id": "ID_325430736",
+      "children": [
+        {
+          "text": "who | grep {{ user }}",
+          "id": "ID_1751035182",
+          "attributes": {
+            "user": "bebebeka"
+          }
+        },
+        {
+          "text": "find another user",
+          "id": "ID_1914466011",
+          "attributes": {
+            "user": "root"
+          },
+          "relationships": [
+            {
+              "target_id": "ID_1751035182"
+            }
+          ]
+        },
+        {
+          "text": "print six",
+          "id": "ID_119864851",
+          "attributes": {
+            "first": "3",
+            "second": "3"
+          },
+          "relationships": [
+            {
+              "target_id": "ID_1713493642"
+            }
+          ]
+        }
+      ],
+      "tags": [
+        "WINDOW"
+      ]
+    },
+    {
+      "text": "function",
+      "id": "ID_1268196801",
+      "children": [
+        {
+          "text": "sum",
+          "id": "ID_1713493642",
+          "detail": "echo {{ first }} + {{ second }} | bc"
+        }
+      ]
+    }
+  ],
+  "attributes": {
+    "script1": "service-only groovy script",
+    "exec.pre": "ssh hw0076"
+  }
+}

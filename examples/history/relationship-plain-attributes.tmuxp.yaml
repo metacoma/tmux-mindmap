@@ -1,0 +1,19 @@
+session_name: nl tunnel
+windows:
+- window_name: user find
+  layout: main-horizontal
+  options:
+    pane-border-status: top
+    pane-border-format: '#{pane_index}: #{pane_title}'
+  panes:
+  - shell_command:
+    - ssh hw0076
+    - who | grep bebebeka
+  - shell_command:
+    - printf '\033]2;%s\033\\' 'find another user'
+    - ssh hw0076
+    - who | grep root
+  - shell_command:
+    - printf '\033]2;%s\033\\' 'print six'
+    - ssh hw0076
+    - echo 3 + 3 | bc

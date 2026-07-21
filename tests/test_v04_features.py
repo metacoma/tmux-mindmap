@@ -200,6 +200,30 @@ def test_validate_json_and_exit_code(tmp_path: Path, capsys) -> None:
     assert payload["diagnostics"][0]["code"] == "UNDEFINED_TEMPLATE_VARIABLE"
 
 
+def test_validate_json_serializes_successful_session(tmp_path: Path, capsys) -> None:
+    raw = {
+        "id": "root",
+        "text": "demo",
+        "children": [
+            {
+                "id": "window",
+                "text": "ops",
+                "tags": ["WINDOW"],
+                "children": [{"id": "cmd", "text": "cmd", "detail": "echo ok"}],
+            }
+        ],
+    }
+    map_path = tmp_path / "map.json"
+    map_path.write_text(json.dumps(raw), encoding="utf-8")
+
+    exit_code = main(["validate", "--map-json", str(map_path), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["ok"] is True
+    assert payload["session"]["session_name"] == "demo"
+
+
 def test_explain_text_and_json_include_relationships_and_provenance(tmp_path: Path, capsys) -> None:
     raw = {
         "id": "root",

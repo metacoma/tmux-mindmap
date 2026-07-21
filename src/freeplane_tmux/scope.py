@@ -37,6 +37,15 @@ _SERVICE_ATTRIBUTE_NAMES = {
     "tmux.layout",
     "tmux.mode",
 }
+_RESERVED_LOCAL_BINDING_NAMES = {
+    "args",
+    "env",
+    "node",
+    "pane",
+    "session",
+    "vars",
+    "window",
+}
 
 
 @dataclass(frozen=True)
@@ -96,7 +105,9 @@ def _merge_object_fields(*mappings: dict[str, tuple[str, ...]]) -> dict[str, tup
     return {path: tuple(fields.keys()) for path, fields in merged.items()}
 
 
-def split_attributes(attributes: dict[str, Any]) -> ScopeLayer:
+def split_attributes(
+    attributes: dict[str, Any], *, node_id: str | None = None, node_text: str | None = None
+) -> ScopeLayer:
     scoped_vars: dict[str, str] = {}
     env_out: dict[str, str] = {}
     pre_out: list[str] = []
@@ -151,6 +162,10 @@ def split_attributes(attributes: dict[str, Any]) -> ScopeLayer:
             continue
         if key == "type" and value == "list":
             continue
+        _validate_template_segment(key, kind="attribute", path=key)
+        if key in _RESERVED_LOCAL_BINDING_NAMES:
+            node_label = node_id if node_text is None else f'{node_id} "{node_text}"'
+            raise SemanticError(f'ordinary attribute name "{key}" is reserved in node {node_label}')
         runtime_attrs[key] = value
 
     return ScopeLayer(
@@ -195,6 +210,7 @@ class ScopeResolver:
         *,
         runtime_context: RuntimeTemplateContext,
         args_namespace: dict[str, str] | None,
+        local_bindings: dict[str, str] | None,
         strict: bool,
         subject: str,
     ) -> ScopeSnapshot:
@@ -229,6 +245,14 @@ class ScopeResolver:
                 raw_scalars[f"args.{name}"] = RawScalarTemplate(path=f"args.{name}", template=value)
         else:
             object_fields = _merge_object_fields(object_fields, {"args": ()})
+
+        if args_namespace:
+            for name, value in args_namespace.items():
+                raw_scalars[name] = RawScalarTemplate(path=name, template=value)
+
+        if local_bindings:
+            for name, value in local_bindings.items():
+                raw_scalars[name] = RawScalarTemplate(path=name, template=value)
 
         for path, value in runtime_context.scalars.items():
             raw_scalars[path] = RawScalarTemplate(path=path, template=value)

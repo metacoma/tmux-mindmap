@@ -185,9 +185,22 @@ class MindmapCompiler:
         return targets
 
     def _node_layer(self, node: RawNode) -> ScopeLayer:
-        attributes = split_attributes(node.attributes)
+        attributes = split_attributes(node.attributes, node_id=node.id, node_text=node.text)
         aliases = self._aliases_declared_by(node)
         return combine_layer(attributes, aliases=aliases)
+
+    def _local_template_bindings(self, node: RawNode) -> dict[str, str]:
+        return dict(self._node_layer(node).runtime_attrs)
+
+    def _relationship_target_defaults(self, target: RawNode) -> dict[str, str]:
+        defaults = dict(self._node_layer(target).helper_defaults)
+        defaults.update(self._local_template_bindings(target))
+        return defaults
+
+    def _relationship_callsite_overrides(self, callsite: RawNode) -> dict[str, str]:
+        overrides = dict(self._node_layer(callsite).call_args)
+        overrides.update(self._local_template_bindings(callsite))
+        return overrides
 
     def _runtime_attribute_dict(self, node: RawNode) -> dict[str, str]:
         return dict(self._node_layer(node).runtime_attrs)
@@ -282,6 +295,7 @@ class MindmapCompiler:
         node_id: str | None = None,
         node_attributes: dict[str, str] | None = None,
         args_namespace: dict[str, str] | None = None,
+        local_bindings: dict[str, str] | None = None,
     ) -> ScopeSnapshot:
         return self._resolver.resolve(
             layers,
@@ -298,6 +312,7 @@ class MindmapCompiler:
                 node_attributes=node_attributes,
             ),
             args_namespace=args_namespace,
+            local_bindings=local_bindings,
             strict=strict,
             subject=subject,
         )
@@ -320,6 +335,7 @@ class MindmapCompiler:
         node_id: str | None = None,
         node_attributes: dict[str, str] | None = None,
         args_namespace: dict[str, str] | None = None,
+        local_bindings: dict[str, str] | None = None,
     ) -> str:
         if not template.strip():
             return default
@@ -338,6 +354,7 @@ class MindmapCompiler:
             node_id=node_id,
             node_attributes=node_attributes,
             args_namespace=args_namespace,
+            local_bindings=local_bindings,
         )
         rendered = self._resolver.render_value(template, scope, subject=subject).strip()
         return rendered or default
@@ -732,11 +749,6 @@ class MindmapCompiler:
         layers.append(self._node_layer(target))
         return tuple(layers)
 
-    def _relationship_args_namespace(self, callsite: RawNode, target: RawNode) -> dict[str, str]:
-        namespace = dict(self._node_layer(target).helper_defaults)
-        namespace.update(self._node_layer(callsite).call_args)
-        return namespace
-
     def _compile_implicit_pane(
         self,
         pane_plan: _ImplicitPanePlan,
@@ -908,7 +920,8 @@ class MindmapCompiler:
             include_callsite_layer=include_callsite_layer,
         )
         relationship_args = dict(args_namespace or {})
-        relationship_args.update(self._relationship_args_namespace(callsite, target))
+        relationship_args.update(self._relationship_target_defaults(target))
+        relationship_args.update(self._relationship_callsite_overrides(callsite))
         return self._expand_node(
             target,
             inherited_layers=relationship_layers,
@@ -947,6 +960,7 @@ class MindmapCompiler:
         local_layers = self._layers_for_node(
             inherited_layers, node, include_local_layer=include_local_layer
         )
+        local_bindings = self._local_template_bindings(node) if include_local_layer else None
         node_attributes = self._runtime_attribute_dict(node)
         node_name = self._render_node_text(
             node.text,
@@ -962,6 +976,7 @@ class MindmapCompiler:
             node_attributes=node_attributes,
             subject=self._field_subject(node, "text"),
             args_namespace=args_namespace,
+            local_bindings=local_bindings,
         )
         children = self._non_alias_children(node)
         uses_text_payload = bool(
@@ -987,6 +1002,7 @@ class MindmapCompiler:
             node_id=node.id,
             node_attributes=node_attributes,
             args_namespace=args_namespace,
+            local_bindings=local_bindings,
         )
 
         steps: list[CommandStep] = []

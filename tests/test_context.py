@@ -357,7 +357,7 @@ def test_scoped_variables_and_runtime_attributes_have_separate_namespaces() -> N
     assert [step.command for step in pane.steps] == ["echo eu server01 jira_cmdb jira_cmdb_sam"]
 
 
-def test_ordinary_attribute_is_not_promoted_to_top_level_scope() -> None:
+def test_ordinary_attribute_is_available_as_local_flat_variable() -> None:
     raw = node(
         "root",
         "demo",
@@ -366,14 +366,20 @@ def test_ordinary_attribute_is_not_promoted_to_top_level_scope() -> None:
                 "window",
                 "ops",
                 tags=["WINDOW"],
-                attributes={"host": "server01"},
-                children=[node("cmd", "show", detail="echo {{ host }}")],
+                children=[
+                    node(
+                        "cmd",
+                        "show",
+                        detail="echo {{ user }} {{ node.user }}",
+                        attributes={"user": "bebebeka"},
+                    )
+                ],
             )
         ],
     )
 
-    with pytest.raises(SemanticError, match=r'undefined template variable "host"'):
-        compile_map(raw)
+    pane = compile_map(raw).windows[0].panes[0]
+    assert [step.command for step in pane.steps] == ["echo bebebeka bebebeka"]
 
 
 @pytest.mark.parametrize(
@@ -427,6 +433,33 @@ def test_script1_stays_service_only(template: str) -> None:
                 tags=["WINDOW"],
                 children=[
                     node("pane", "pane", children=[node("cmd", "show", detail=f"echo {template}")])
+                ],
+            )
+        ],
+    )
+
+    with pytest.raises(SemanticError):
+        compile_map(raw)
+
+
+@pytest.mark.parametrize("template", ["{{ exec.pre }}", "{{ tmux.mode }}"])
+def test_service_attributes_do_not_become_plain_template_variables(template: str) -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                attributes={"tmux.mode": "single-pane"},
+                children=[
+                    node(
+                        "cmd",
+                        "show",
+                        detail=f"echo {template}",
+                        attributes={"exec.pre": "echo hidden"},
+                    )
                 ],
             )
         ],
@@ -497,6 +530,35 @@ def test_reserved_scoped_variable_names_are_rejected() -> None:
     )
 
     with pytest.raises(SemanticError, match='Scoped variable name "window" is reserved'):
+        compile_map(raw)
+
+
+@pytest.mark.parametrize("attribute_name", ["node", "window", "pane", "session", "env"])
+def test_reserved_plain_attribute_names_are_rejected(attribute_name: str) -> None:
+    raw = node(
+        "root",
+        "demo",
+        children=[
+            node(
+                "window",
+                "ops",
+                tags=["WINDOW"],
+                children=[
+                    node(
+                        "cmd",
+                        "show",
+                        detail="echo ok",
+                        attributes={attribute_name: "bad"},
+                    )
+                ],
+            )
+        ],
+    )
+
+    with pytest.raises(
+        SemanticError,
+        match=rf'ordinary attribute name "{attribute_name}" is reserved in node cmd "show"',
+    ):
         compile_map(raw)
 
 
