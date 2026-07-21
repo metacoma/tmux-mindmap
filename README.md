@@ -30,7 +30,7 @@ Version 0.4 turns the map into a small Freeplane IDE for tmux sessions:
 - Projection of `tmux-mindmap` diagnostics back to the opened Freeplane map through the existing Groovy RPC.
 - Explicit global `vars.*` namespace built from the root child `vars`.
 - Runtime namespaces: `session.*`, `window.*`, `pane.*`, `node.*`, `env.*`, `args.*`.
-- Ordinary attributes of the currently executing command node are also available as local flat template variables.
+- Ordinary attributes inherit down the active execution path and are available as flat template variables; nearer nodes override ancestors.
 - Explicit scoped variables via `var.*`.
 - Explicit environment variables via `env.*`.
 - Relationship calls use ordinary attributes as function parameters; target attributes act as defaults and callsite attributes act as overrides.
@@ -256,8 +256,9 @@ Helper relationships behave like function calls:
 - ordinary attributes on the callsite node are call overrides;
 - inherited relationship bindings remain visible to nested helper calls;
 - nested merge order is `parent relationship bindings -> nested target defaults -> nested callsite overrides`;
-- ordinary attributes become flat template variables only for the currently executing command node;
-- the same values remain available through `node.*`.
+- ordinary attributes inherited from the active root/window/pane/node path remain available as flat template variables;
+- target defaults and callsite overrides keep their relationship precedence;
+- the current node values remain available through `node.*`.
 
 Example:
 
@@ -381,12 +382,12 @@ The supported template namespaces are:
 - `env.*`
 - `args.*`
 - flat scoped variables declared via `var.*`
-- local flat variables from ordinary attributes of the currently executing command node
+- inherited flat variables from ordinary attributes along the active execution path
 
 Rules:
 
 - `node.*` exposes ordinary attributes of the current node as object fields;
-- plain `{{ name }}` resolves only against the current command node, active relationship bindings, and `var.*` values;
+- plain `{{ name }}` resolves against inherited ordinary attributes, the current command node, active relationship bindings, and `var.*` values; nearer layers win;
 - service attributes are never exposed as flat variables or through runtime objects;
 - ordinary attribute names cannot shadow `session`, `window`, `pane`, `node`, `env`, `vars`, or `args`.
 

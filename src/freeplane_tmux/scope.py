@@ -215,12 +215,14 @@ class ScopeResolver:
         subject: str,
     ) -> ScopeSnapshot:
         raw_scoped: dict[str, str] = {}
+        raw_runtime_attrs: dict[str, str] = {}
         raw_env: dict[str, str] = {}
         raw_pre: list[str] = []
         raw_aliases: dict[str, AliasTemplate] = {}
 
         for layer in layers:
             raw_scoped.update(layer.scoped_vars)
+            raw_runtime_attrs.update(layer.runtime_attrs)
             raw_env.update(layer.env)
             raw_pre.extend(layer.pre)
             raw_aliases.update(layer.aliases)
@@ -232,6 +234,8 @@ class ScopeResolver:
         )
 
         for name, value in raw_scoped.items():
+            raw_scalars[name] = RawScalarTemplate(path=name, template=value)
+        for name, value in raw_runtime_attrs.items():
             raw_scalars[name] = RawScalarTemplate(path=name, template=value)
         if raw_env:
             object_fields = _merge_object_fields(object_fields, {"env": tuple(raw_env.keys())})

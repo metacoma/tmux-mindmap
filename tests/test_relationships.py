@@ -189,6 +189,81 @@ def test_relationship_exec_pre_appends_after_callsite_chain() -> None:
     )
 
 
+def test_relationship_inherits_plain_attributes_from_window_scope() -> None:
+    raw = node(
+        "root",
+        "ssh-tunnel",
+        attributes={"exec.pre": "ssh hw0076", "var.remote_ip": "10.50.0.1"},
+        children=[
+            node(
+                "window",
+                "tunnel",
+                tags=["WINDOW"],
+                attributes={
+                    "namespace": "network",
+                    "filter": "app=ssh-tunnel-nl0",
+                    "shell": "/bin/bash",
+                },
+                children=[
+                    node(
+                        "ping-pane",
+                        "ping",
+                        relationship="exec-pod",
+                        children=[node("ping", "ping {{ remote_ip }}")],
+                    ),
+                    node(
+                        "ifconfig-pane",
+                        "ifconfig",
+                        relationship="exec-pod",
+                        children=[node("ifconfig", "ip a show")],
+                    ),
+                ],
+            ),
+            node(
+                "function",
+                "function",
+                children=[
+                    node(
+                        "exec-pod",
+                        "exec pod",
+                        detail=(
+                            "kubectl exec -ti -n {{ namespace }} "
+                            '"$(kubectl get pod -n {{ namespace }} -l '
+                            "'{{ filter }}' -o jsonpath='{.items[0].metadata.name}')\" "
+                            "-- {{ shell }}"
+                        ),
+                    )
+                ],
+            ),
+        ],
+    )
+
+    window = compile_map(raw).windows[0]
+
+    assert [pane.title for pane in window.panes] == ["ping", "ifconfig"]
+    assert [[step.command for step in pane.steps] for pane in window.panes] == [
+        [
+            (
+                "kubectl exec -ti -n network "
+                '"$(kubectl get pod -n network -l '
+                "'app=ssh-tunnel-nl0' -o jsonpath='{.items[0].metadata.name}')\" "
+                "-- /bin/bash"
+            ),
+            "ping 10.50.0.1",
+        ],
+        [
+            (
+                "kubectl exec -ti -n network "
+                '"$(kubectl get pod -n network -l '
+                "'app=ssh-tunnel-nl0' -o jsonpath='{.items[0].metadata.name}')\" "
+                "-- /bin/bash"
+            ),
+            "ip a show",
+        ],
+    ]
+    assert all(pane.base_scope.pre == ("ssh hw0076",) for pane in window.panes)
+
+
 def test_window_inheritance_fixture_uses_new_runtime_context() -> None:
     raw = yaml.safe_load((FIXTURE_DIR / "window-inheritance.map.yaml").read_text(encoding="utf-8"))
     session = compile_map(raw)
